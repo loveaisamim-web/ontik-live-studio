@@ -4,10 +4,12 @@ import android.content.Context
 import com.google.android.gms.auth.api.signin.GoogleSignIn
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
+import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
+import com.google.api.client.json.gson.GsonFactory
 import com.google.api.services.youtube.YouTube
 import com.google.api.services.youtube.model.LiveStream
-import com.google.api.services.youtube.model.LiveStreamCdn
+import com.google.api.services.youtube.model.CdnSettings
 import com.google.api.services.youtube.model.LiveStreamSnippet
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -37,8 +39,8 @@ class YouTubeAuthManager(private val context: Context) {
             }
 
             val youtube = YouTube.Builder(
-                credential.transport,
-                credential.jsonFactory,
+                AndroidHttp.newCompatibleTransport(),
+                GsonFactory.getDefaultInstance(),
                 credential
             ).setApplicationName("ONTIK Live Studio").build()
 
@@ -46,7 +48,7 @@ class YouTubeAuthManager(private val context: Context) {
 
             val snippet = LiveStreamSnippet().setTitle(title)
 
-            val cdn = LiveStreamCdn()
+            val cdn = CdnSettings()
                 .setFrameRate("30fps")
                 .setResolution("1080p")
                 .setIngestionType("rtmp")
