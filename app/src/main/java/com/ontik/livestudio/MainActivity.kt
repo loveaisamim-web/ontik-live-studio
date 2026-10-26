@@ -5,15 +5,12 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.provider.OpenableColumns
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
-import com.google.android.gms.auth.api.signin.GoogleSignIn
 import kotlinx.coroutines.*
 
 class MainActivity : AppCompatActivity() {
@@ -57,7 +54,7 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK) {
-            statusText.text = "Creating YouTube live stream…"
+            statusText.text = "Creating YouTube live stream..."
             scope.launch {
                 val r = ytManager.createLiveStream()
                 if (r != null) {
@@ -153,7 +150,7 @@ class MainActivity : AppCompatActivity() {
             intent.putExtra(StreamingService.EXTRA_RESULT_DATA, resultData)
         }
         ContextCompat.startForegroundService(this, intent)
-        statusText.text = "Streaming ${mode.name.lowercase()}…"
+        statusText.text = "Streaming ${mode.name.lowercase()}..."
     }
 
     override fun onDestroy() { scope.cancel(); super.onDestroy() }

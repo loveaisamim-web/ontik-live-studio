@@ -40,6 +40,7 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
+
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     implementation("com.google.android.gms:play-services-auth:21.3.0")
@@ -48,8 +49,5 @@ dependencies {
     }
     implementation("com.google.guava:guava:33.3.1-android")
 
-    implementation("androidx.media3:media3-exoplayer:1.6.0")
-    implementation("androidx.media3:media3-extractor:1.6.0")
-
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.10.2")
 }
