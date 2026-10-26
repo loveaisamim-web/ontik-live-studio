@@ -7,10 +7,11 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.pedro.common.ConnectChecker
+import com.pedro.encoder.input.decoder.DefaultAudioDecoder
+import com.pedro.encoder.input.decoder.DefaultVideoDecoder
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.rtmp.RtmpDisplay
 import com.pedro.library.rtmp.RtmpFromFile
-import com.pedro.library.view.OpenGlView
 
 class StreamingService : Service(), ConnectChecker {
 
@@ -26,7 +27,6 @@ class StreamingService : Service(), ConnectChecker {
     private var rtmpCamera2: RtmpCamera2? = null
     private var rtmpDisplay: RtmpDisplay? = null
     private var rtmpFromFile: RtmpFromFile? = null
-    private var openGlView: OpenGlView? = null
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -65,10 +65,8 @@ class StreamingService : Service(), ConnectChecker {
     }
 
     private fun startCamera(config: StreamConfig) {
-        val view = OpenGlView(this).apply { startGlThread() }
-        openGlView = view
-        rtmpCamera2 = RtmpCamera2(view, this).apply {
-            setReTries(10)
+        rtmpCamera2 = RtmpCamera2(this, this).apply {
+            getStreamClient().setReTries(10)
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 0)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo)
             startStream(config.fullRtmpUrl)
@@ -85,7 +83,7 @@ class StreamingService : Service(), ConnectChecker {
             return
         }
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
-            setReTries(10)
+            getStreamClient().setReTries(10)
             setIntentResult(resultCode, resultData)
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo)
@@ -100,10 +98,11 @@ class StreamingService : Service(), ConnectChecker {
             stopStreaming()
             return
         }
-        val view = OpenGlView(this).apply { startGlThread() }
-        openGlView = view
-        rtmpFromFile = RtmpFromFile(view, this).apply {
-            setReTries(10)
+        rtmpFromFile = RtmpFromFile(
+            this, this,
+            DefaultVideoDecoder(), DefaultAudioDecoder()
+        ).apply {
+            getStreamClient().setReTries(10)
             setVideoFile(path)
             setLoopMode(config.loopFile)
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate)
@@ -119,7 +118,6 @@ class StreamingService : Service(), ConnectChecker {
         rtmpCamera2 = null
         rtmpDisplay = null
         rtmpFromFile = null
-        openGlView = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

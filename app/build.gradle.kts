@@ -45,6 +45,7 @@ dependencies {
 
     implementation("com.google.android.gms:play-services-auth:21.3.0")
     implementation("com.google.apis:google-api-services-youtube:v3-rev20241010-2.0.0") {
+    implementation("com.google.api-client:google-api-client-android:2.2.0")
         exclude(group = "com.google.guava", module = "guava")
     }
     implementation("com.google.guava:guava:33.3.1-android")
