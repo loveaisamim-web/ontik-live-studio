@@ -29,7 +29,6 @@ android {
 
 dependencies {
     implementation("com.github.pedroSG94.RootEncoder:library:2.6.5")
-    implementation("com.github.pedroSG94.RootEncoder:extra-sources:2.6.5")
 
     val camerax = "1.4.1"
     implementation("androidx.camera:camera-core:$camerax")

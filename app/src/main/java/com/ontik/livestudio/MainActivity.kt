@@ -5,8 +5,10 @@ import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.media.projection.MediaProjectionManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.widget.*
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -22,11 +24,13 @@ class MainActivity : AppCompatActivity() {
     private lateinit var startBtn: Button
     private lateinit var stopBtn: Button
     private lateinit var youtubeBtn: Button
+    private lateinit var pickFileBtn: Button
     private lateinit var statusText: TextView
 
     private val prefs by lazy { SecurePrefs(this) }
     private val ytManager by lazy { YouTubeAuthManager(this) }
     private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var selectedFileUri: String? = null
 
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -36,11 +40,17 @@ class MainActivity : AppCompatActivity() {
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
         if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-            MediaProjectionHolder.projection =
-                mpm.getMediaProjection(result.resultCode, result.data)
-            launchService(StreamMode.SCREEN)
+            launchService(StreamMode.SCREEN, result.resultCode, result.data)
         } else statusText.text = "Screen capture denied"
+    }
+
+    private val filePicker = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data?.data != null) {
+            selectedFileUri = result.data!!.data.toString()
+            statusText.text = "File selected"
+        }
     }
 
     private val youtubeLauncher = registerForActivityResult(
@@ -64,13 +74,14 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        modeSpinner = findViewById(R.id.modeSpinner)
-        urlInput    = findViewById(R.id.urlInput)
-        keyInput    = findViewById(R.id.keyInput)
-        startBtn    = findViewById(R.id.startBtn)
-        stopBtn     = findViewById(R.id.stopBtn)
-        youtubeBtn  = findViewById(R.id.youtubeBtn)
-        statusText  = findViewById(R.id.statusText)
+        modeSpinner  = findViewById(R.id.modeSpinner)
+        urlInput     = findViewById(R.id.urlInput)
+        keyInput     = findViewById(R.id.keyInput)
+        startBtn     = findViewById(R.id.startBtn)
+        stopBtn      = findViewById(R.id.stopBtn)
+        youtubeBtn   = findViewById(R.id.youtubeBtn)
+        pickFileBtn  = findViewById(R.id.pickFileBtn)
+        statusText   = findViewById(R.id.statusText)
 
         modeSpinner.adapter = ArrayAdapter(
             this, android.R.layout.simple_spinner_dropdown_item,
@@ -89,6 +100,13 @@ class MainActivity : AppCompatActivity() {
                 .setAction(StreamingService.ACTION_STOP))
         }
         youtubeBtn.setOnClickListener { youtubeLauncher.launch(ytManager.signInIntent()) }
+        pickFileBtn.setOnClickListener {
+            val i = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "video/*"
+            }
+            filePicker.launch(i)
+        }
     }
 
     private fun requestPermissionsAndStart() {
@@ -112,19 +130,28 @@ class MainActivity : AppCompatActivity() {
                 val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                 projectionLauncher.launch(mpm.createScreenCaptureIntent())
             }
-            2 -> launchService(StreamMode.FILE)
+            2 -> {
+                if (selectedFileUri == null) statusText.text = "Pick a video file first"
+                else launchService(StreamMode.FILE)
+            }
         }
     }
 
-    private fun launchService(mode: StreamMode) {
+    private fun launchService(mode: StreamMode, resultCode: Int = 0, resultData: Intent? = null) {
         val config = StreamConfig(
             mode = mode,
             rtmpUrl = urlInput.text.toString().trim(),
-            streamKey = keyInput.text.toString().trim()
+            streamKey = keyInput.text.toString().trim(),
+            fileUri = selectedFileUri,
+            loopFile = true
         )
         val intent = Intent(this, StreamingService::class.java)
             .setAction(StreamingService.ACTION_START)
             .putExtra(StreamingService.EXTRA_CONFIG, config)
+        if (resultData != null) {
+            intent.putExtra(StreamingService.EXTRA_RESULT_CODE, resultCode)
+            intent.putExtra(StreamingService.EXTRA_RESULT_DATA, resultData)
+        }
         ContextCompat.startForegroundService(this, intent)
         statusText.text = "Streaming ${mode.name.lowercase()}…"
     }
