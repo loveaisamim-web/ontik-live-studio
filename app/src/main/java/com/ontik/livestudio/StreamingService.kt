@@ -7,13 +7,13 @@ import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
 import com.pedro.common.ConnectChecker
-import com.pedro.encoder.input.decoder.DefaultAudioDecoder
-import com.pedro.encoder.input.decoder.DefaultVideoDecoder
+import com.pedro.encoder.input.decoder.AudioDecoderInterface
+import com.pedro.encoder.input.decoder.VideoDecoderInterface
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.rtmp.RtmpDisplay
 import com.pedro.library.rtmp.RtmpFromFile
 
-class StreamingService : Service(), ConnectChecker {
+class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, AudioDecoderInterface {
 
     companion object {
         const val ACTION_START = "com.ontik.START"
@@ -98,15 +98,22 @@ class StreamingService : Service(), ConnectChecker {
             stopStreaming()
             return
         }
+
+        val uri = android.net.Uri.parse(path)
         rtmpFromFile = RtmpFromFile(
-            this, this,
-            DefaultVideoDecoder(), DefaultAudioDecoder()
+            this, this, this, this
         ).apply {
             getStreamClient().setReTries(10)
-            setVideoFile(path)
             setLoopMode(config.loopFile)
-            prepareVideo(config.width, config.height, config.fps, config.videoBitrate)
-            prepareAudio(config.audioBitrate, config.sampleRate, config.stereo)
+
+            val videoPrepared = prepareVideo(this@StreamingService, uri)
+            val audioPrepared = prepareAudio(this@StreamingService, uri)
+            if (!videoPrepared && !audioPrepared) {
+                Log.e(TAG, "Could not prepare selected media file")
+                stopStreaming()
+                return
+            }
+
             startStream(config.fullRtmpUrl)
         }
     }
@@ -124,6 +131,8 @@ class StreamingService : Service(), ConnectChecker {
 
     override fun onDestroy() { stopStreaming(); super.onDestroy() }
 
+    override fun onVideoDecoderFinished() {}
+    override fun onAudioDecoderFinished() {}
     override fun onConnectionStarted(url: String) { Log.d(TAG, "Connecting: $url") }
     override fun onConnectionSuccess() { Log.d(TAG, "Connected") }
     override fun onConnectionFailed(reason: String) { Log.e(TAG, "Failed: $reason") }
