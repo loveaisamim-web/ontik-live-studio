@@ -7,6 +7,12 @@ android {
     namespace = "com.ontik.livestudio"
     compileSdk = 35
 
+    packaging {
+        resources {
+            excludes += "/META-INF/INDEX.LIST"
+        }
+    }
+
     defaultConfig {
         applicationId = "com.ontik.livestudio"
         minSdk = 24
