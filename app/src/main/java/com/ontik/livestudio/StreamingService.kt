@@ -79,7 +79,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private var reconnectJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // Floating Dashboard Elements
     private var windowManager: WindowManager? = null
     private var floatingWidgetView: View? = null
     private var floatingDetailsCard: LinearLayout? = null
@@ -163,8 +162,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     }
 
     private fun toggleStreamPause() {
-        val streamer: Any? = rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile
-        if (streamer == null || !isStreamingActive) return
+        val streamer = (rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile) ?: return
+        if (!isStreamingActive) return
 
         isStreamPaused = !isStreamPaused
         try {
@@ -239,7 +238,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
             topRow.addView(bubbleIcon)
 
-            // Expanded Floating Glass Dashboard
             val detailsCard = LinearLayout(this).apply {
                 orientation = LinearLayout.VERTICAL
                 visibility = View.GONE
@@ -441,11 +439,16 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     }
 
     private fun toggleAudioMute() {
-        val streamer: Any? = rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile ?: return
+        val streamer = (rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile) ?: return
         try {
             isAudioMuted = !isAudioMuted
             val method = if (isAudioMuted) "muteAudio" else "unMuteAudio"
-            streamer.javaClass.getMethod(method).invoke(streamer)
+            val fallback = if (isAudioMuted) "disableAudio" else "enableAudio"
+            try {
+                streamer.javaClass.getMethod(method).invoke(streamer)
+            } catch (_: NoSuchMethodException) {
+                streamer.javaClass.getMethod(fallback).invoke(streamer)
+            }
             updateFloatingStats()
             val intent = Intent(ACTION_STATUS).apply {
                 putExtra(EXTRA_IS_MUTED, isAudioMuted)

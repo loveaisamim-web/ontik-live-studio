@@ -34,7 +34,7 @@ class YouTubeAuthManager(private val context: Context) {
         val credential = GoogleAccountCredential.usingOAuth2(
             context, listOf(YouTubeScopes.YOUTUBE)
         ).apply {
-            selectedAccount = account.account
+            setSelectedAccount(account.account)
         }
         return YouTube.Builder(NetHttpTransport(), GsonFactory.getDefaultInstance(), credential)
             .setApplicationName("ONTIK Live Studio")
