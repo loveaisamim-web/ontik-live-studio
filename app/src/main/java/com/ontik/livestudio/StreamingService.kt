@@ -24,6 +24,7 @@ import androidx.core.app.ServiceCompat
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.decoder.AudioDecoderInterface
 import com.pedro.encoder.input.decoder.VideoDecoderInterface
+import com.pedro.encoder.utils.gl.AspectRatioMode
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.rtmp.RtmpDisplay
 import com.pedro.library.rtmp.RtmpFromFile
@@ -114,11 +115,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 val config = intent.getSerializableExtra(EXTRA_CONFIG) as? StreamConfig
                 val enableFloating = intent.getBooleanExtra(EXTRA_ENABLE_FLOATING, true)
                 if (config != null) {
-                    activeConfig = config
-                    isStreamingActive = true
-                    isAudioMuted = false
-                    isStreamPaused = false
-                    reconnectAttempts = 0
+                    activeConfig = config; isStreamingActive = true; isAudioMuted = false; isStreamPaused = false; reconnectAttempts = 0
                     startStreaming(config, intent)
                     if (enableFloating) showFloatingWidget()
                 }
@@ -127,18 +124,9 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             ACTION_TOGGLE_MUTE -> toggleAudioMute()
             ACTION_SWITCH_CAMERA -> switchCamera()
             ACTION_TOGGLE_TORCH -> toggleTorch()
-            ACTION_SET_ZOOM -> {
-                val zoom = intent.getFloatExtra(EXTRA_ZOOM_LEVEL, 1.0f)
-                applyCameraZoom(zoom)
-            }
-            ACTION_UPDATE_VIEWERS -> {
-                currentViewers = intent.getLongExtra(EXTRA_VIEWERS, 0L)
-                updateFloatingStats()
-            }
-            ACTION_STOP -> {
-                isStreamingActive = false
-                stopStreaming(keepPreview = false)
-            }
+            ACTION_SET_ZOOM -> applyCameraZoom(intent.getFloatExtra(EXTRA_ZOOM_LEVEL, 1.0f))
+            ACTION_UPDATE_VIEWERS -> { currentViewers = intent.getLongExtra(EXTRA_VIEWERS, 0L); updateFloatingStats() }
+            ACTION_STOP -> { isStreamingActive = false; stopStreaming(keepPreview = false) }
         }
         return START_NOT_STICKY
     }
@@ -151,9 +139,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     }
 
     fun applyCameraTouch(event: MotionEvent) {
-        rtmpCamera2?.let { cam ->
-            try { cam.javaClass.getMethod("setZoom", MotionEvent::class.java).invoke(cam, event) } catch (_: Exception) {}
-        }
+        rtmpCamera2?.let { cam -> try { cam.javaClass.getMethod("setZoom", MotionEvent::class.java).invoke(cam, event) } catch (_: Exception) {} }
     }
 
     private fun toggleStreamPause() {
@@ -192,11 +178,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         fun invokeMute(obj: Any) {
             val method = if (isAudioMuted) "muteAudio" else "unMuteAudio"
             val fallback = if (isAudioMuted) "disableAudio" else "enableAudio"
-            try {
-                obj.javaClass.getMethod(method).invoke(obj)
-            } catch (_: NoSuchMethodException) {
-                try { obj.javaClass.getMethod(fallback).invoke(obj) } catch (e: Exception) { Log.e(TAG, "Mute fallback error: ${e.message}") }
-            } catch (e: Exception) { Log.e(TAG, "Mute error: ${e.message}") }
+            try { obj.javaClass.getMethod(method).invoke(obj) } 
+            catch (_: NoSuchMethodException) { try { obj.javaClass.getMethod(fallback).invoke(obj) } catch (_: Exception) {} }
         }
 
         rtmpCamera2?.let { invokeMute(it) }
@@ -205,10 +188,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
         updateFloatingStats()
         val intent = Intent(ACTION_STATUS).apply {
-            putExtra(EXTRA_IS_MUTED, isAudioMuted)
-            putExtra(EXTRA_STATUS_MSG, if (isAudioMuted) "Microphone Muted" else "Microphone Live")
-            putExtra(EXTRA_IS_LIVE, true)
-            setPackage(packageName)
+            putExtra(EXTRA_IS_MUTED, isAudioMuted); putExtra(EXTRA_STATUS_MSG, if (isAudioMuted) "Microphone Muted" else "Microphone Live")
+            putExtra(EXTRA_IS_LIVE, true); setPackage(packageName)
         }
         sendBroadcast(intent)
     }
@@ -234,10 +215,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val topRow = LinearLayout(this).apply { orientation = LinearLayout.HORIZONTAL; gravity = Gravity.CENTER_VERTICAL }
 
             val bubbleIcon = TextView(this).apply {
-                layoutParams = LinearLayout.LayoutParams(bubbleSize, bubbleSize)
-                gravity = Gravity.CENTER
-                text = "🔴"
-                textSize = 18f
+                layoutParams = LinearLayout.LayoutParams(bubbleSize, bubbleSize); gravity = Gravity.CENTER
+                text = "🔴"; textSize = 18f
                 background = GradientDrawable().apply { shape = GradientDrawable.OVAL; setColor(Color.parseColor("#EE12141D")); setStroke((1.5f * density).toInt(), Color.parseColor("#FF1744")) }
             }
 
@@ -273,8 +252,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val pauseBtn = Button(this).apply {
                 text = "Pause"; textSize = 10f; setTextColor(Color.WHITE)
                 background = GradientDrawable().apply { cornerRadius = 10 * density; setColor(Color.parseColor("#F57C00")) }
-                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
-                layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f)
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0); layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f)
                 setOnClickListener { resetAutoFadeTimer(); toggleStreamPause() }
             }
             floatPauseBtn = pauseBtn
@@ -282,8 +260,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val muteBtn = Button(this).apply {
                 text = "Mute"; textSize = 10f; setTextColor(Color.WHITE)
                 background = GradientDrawable().apply { cornerRadius = 10 * density; setColor(Color.parseColor("#2A3147")) }
-                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
-                layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply { leftMargin = (6 * density).toInt() }
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0); layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply { leftMargin = (6 * density).toInt() }
                 setOnClickListener { resetAutoFadeTimer(); toggleAudioMute() }
             }
             floatMuteBtn = muteBtn
@@ -291,8 +268,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val stopBtn = Button(this).apply {
                 text = "Stop"; textSize = 10f; setTextColor(Color.WHITE)
                 background = GradientDrawable().apply { cornerRadius = 10 * density; setColor(Color.parseColor("#D50000")) }
-                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
-                layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply { leftMargin = (6 * density).toInt() }
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0); layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply { leftMargin = (6 * density).toInt() }
                 setOnClickListener { stopStreaming(keepPreview = false) }
             }
 
@@ -310,8 +286,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                         MotionEvent.ACTION_MOVE -> { params.x = initialX + (event.rawX - touchX).toInt(); params.y = initialY + (event.rawY - touchY).toInt(); windowManager?.updateViewLayout(rootLayout, params); return true }
                         MotionEvent.ACTION_UP -> {
                             if (abs(event.rawX - touchX) < 15 && abs(event.rawY - touchY) < 15) {
-                                isDetailsOpen = !isDetailsOpen
-                                detailsCard.visibility = if (isDetailsOpen) View.VISIBLE else View.GONE
+                                isDetailsOpen = !isDetailsOpen; detailsCard.visibility = if (isDetailsOpen) View.VISIBLE else View.GONE
                             }
                             return true
                         }
@@ -394,15 +369,25 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun startCamera(config: StreamConfig) {
         val view = openGlView
         rtmpCamera2 = if (view != null) RtmpCamera2(view, this) else RtmpCamera2(this, this)
-        val isPortrait = config.width < config.height
-        val camW = if (isPortrait) config.height else config.width
-        val camH = if (isPortrait) config.width else config.height
-        val targetRotation = if (isPortrait) 90 else 0
+        
+        val camRot = try {
+            com.pedro.encoder.input.video.CameraHelper.getCameraOrientation(this@StreamingService)
+        } catch (_: Exception) {
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            when (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display?.rotation else @Suppress("DEPRECATION") wm.defaultDisplay.rotation) {
+                Surface.ROTATION_0 -> 90; Surface.ROTATION_90 -> 0; Surface.ROTATION_180 -> 270; Surface.ROTATION_270 -> 180; else -> 90
+            }
+        }
 
         rtmpCamera2?.apply {
             getStreamClient().setReTries(0)
-            prepareVideo(camW, camH, config.fps, config.videoBitrate, 2, targetRotation)
+            
+            // EXACT dimensions sent to encoder without manual swapping
+            prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 2, camRot)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
+            
+            // ADJUST mode prevents stretching
+            try { getGlInterface()?.setAspectRatioMode(AspectRatioMode.ADJUST) } catch (_: Exception) {}
             startStream(config.fullRtmpUrl)
         }
     }
@@ -415,18 +400,14 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             getStreamClient().setReTries(0)
             setIntentResult(resultCode, resultData)
 
-            val isPortraitMode = config.width < config.height
-            val currentOrientation = resources.configuration.orientation
-            val isDevicePortrait = currentOrientation == Configuration.ORIENTATION_PORTRAIT
-
-            val rot = if (isPortraitMode) {
-                if (isDevicePortrait) 0 else 90
-            } else {
-                if (isDevicePortrait) 90 else 0
-            }
-
-            prepareVideo(config.width, config.height, config.fps, config.videoBitrate, rot, 320)
+            // CRITICAL FIX: Direct dimensions, Rotation strictly 0. 
+            // This forces the encoder to create exactly a 1080x1920 canvas for YouTube.
+            prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
+            
+            // ADJUST mode ensures the screen is drawn inside the canvas without squashing (adds black bars if ratios don't match)
+            try { getGlInterface()?.setAspectRatioMode(AspectRatioMode.ADJUST) } catch (_: Exception) {}
+            
             startStream(config.fullRtmpUrl)
         }
     }
@@ -437,7 +418,10 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpFromFile = RtmpFromFile(this, this, this, this).apply {
             getStreamClient().setReTries(0)
             setLoopMode(config.loopFile)
-            if (prepareVideo(this@StreamingService, uri) || prepareAudio(this@StreamingService, uri)) startStream(config.fullRtmpUrl)
+            if (prepareVideo(this@StreamingService, uri) || prepareAudio(this@StreamingService, uri)) {
+                try { getGlInterface()?.setAspectRatioMode(AspectRatioMode.ADJUST) } catch (_: Exception) {}
+                startStream(config.fullRtmpUrl)
+            }
         }
     }
 
