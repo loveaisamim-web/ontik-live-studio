@@ -17,11 +17,101 @@
             android:textSize="22sp"
             android:textStyle="bold" />
 
+        <!-- Live Dashboard Card -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="#1E1E1E"
+            android:orientation="vertical"
+            android:padding="12dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/liveTimerText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="00:00:00"
+                    android:textColor="#FFFFFF"
+                    android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/bitrateText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="0 kbps"
+                    android:textColor="#4CAF50"
+                    android:textSize="16sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/statusText"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Status: Idle"
+                android:textColor="#BBBBBB"
+                android:textSize="14sp" />
+        </LinearLayout>
+
+        <!-- Camera Preview Surface (Visible only in Camera Mode) -->
+        <com.pedro.library.view.OpenGlView
+            android:id="@+id/cameraPreview"
+            android:layout_width="match_parent"
+            android:layout_height="240dp"
+            android:layout_marginTop="12dp"
+            android:visibility="gone" />
+
+        <!-- Camera Controls (Flip & Torch) -->
+        <LinearLayout
+            android:id="@+id/cameraControlsLayout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="6dp"
+            android:visibility="gone">
+
+            <Button
+                android:id="@+id/switchCameraBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Flip Camera" />
+
+            <Button
+                android:id="@+id/torchBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="Torch Toggle" />
+        </LinearLayout>
+
+        <!-- Platform Presets -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Streaming Platform:"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/platformSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
         <!-- Source Mode -->
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
+            android:layout_marginTop="8dp"
             android:text="Stream Source:"
             android:textStyle="bold" />
 
@@ -56,12 +146,29 @@
             android:layout_width="match_parent"
             android:layout_height="48dp" />
 
+        <!-- Protection & Enhancements -->
+        <CheckBox
+            android:id="@+id/keepScreenOnCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:checked="true"
+            android:text="Keep Screen Awake (Prevent Sleep)" />
+
+        <CheckBox
+            android:id="@+id/noiseCancelCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            android:checked="true"
+            android:text="Enable Noise Reduction &amp; Echo Canceler" />
+
         <!-- File Loop Checkbox -->
         <CheckBox
             android:id="@+id/loopCheckbox"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
+            android:layout_marginTop="4dp"
             android:checked="true"
             android:text="Loop Video Continuously (File Mode)" />
 
@@ -69,7 +176,7 @@
             android:id="@+id/pickFileBtn"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
+            android:layout_marginTop="4dp"
             android:text="Pick Video File" />
 
         <!-- RTMP Settings -->
@@ -97,35 +204,37 @@
             android:layout_marginTop="6dp"
             android:text="Sign in with YouTube" />
 
+        <!-- Control Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="16dp">
+            android:layout_marginTop="16dp"
+            android:layout_marginBottom="24dp">
 
             <Button
                 android:id="@+id/startBtn"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:text="Start Stream" />
+                android:text="Start" />
+
+            <Button
+                android:id="@+id/muteBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:text="Mute Mic" />
 
             <Button
                 android:id="@+id/stopBtn"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
-                android:text="Stop Stream" />
+                android:layout_marginStart="6dp"
+                android:text="Stop" />
         </LinearLayout>
-
-        <TextView
-            android:id="@+id/statusText"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Status: Ready"
-            android:textStyle="bold" />
 
     </LinearLayout>
 </ScrollView>
