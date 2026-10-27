@@ -302,8 +302,14 @@ class MainActivity : AppCompatActivity() {
 
         platformSpinner.adapter = createSpinnerAdapter(listOf("YouTube Live", "Facebook Live", "Twitch", "Custom RTMP"))
         modeSpinner.adapter = createSpinnerAdapter(listOf("Camera Live", "Screen Live", "Video File Live"))
-        ratioSpinner.adapter = createSpinnerAdapter(listOf("16:9 Landscape (YouTube Standard)", "9:16 Portrait (YouTube Shorts / Vertical)"))
-        qualitySpinner.adapter = createSpinnerAdapter(listOf("1080p Full HD (4.5 Mbps)", "720p HD (2.5 Mbps - Recommended)", "480p SD (1.2 Mbps - Data Saver)"))
+        ratioSpinner.adapter = createSpinnerAdapter(listOf("9:16 Portrait (YouTube Shorts / Vertical)", "16:9 Landscape (YouTube Standard)"))
+        
+        // Default to stable mobile-friendly 720p HD (2.0 Mbps)
+        qualitySpinner.adapter = createSpinnerAdapter(listOf(
+            "720p HD (2.0 Mbps - Recommended Stable)",
+            "1080p Full HD (3.5 Mbps - High Speed Net)",
+            "480p SD (1.0 Mbps - Low Speed Net)"
+        ))
 
         modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
@@ -403,22 +409,31 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun launchService(mode: StreamMode, resultCode: Int = 0, resultData: Intent? = null) {
-        val isPortrait = (ratioSpinner.selectedItemPosition == 1)
-        val (width, height, bitrate) = when (qualitySpinner.selectedItemPosition) {
-            0 -> if (isPortrait) Triple(1080, 1920, 4_500_000) else Triple(1920, 1080, 4_500_000)
-            2 -> if (isPortrait) Triple(480, 854, 1_200_000) else Triple(854, 480, 1_200_000)
-            else -> if (isPortrait) Triple(720, 1280, 2_500_000) else Triple(1280, 720, 2_500_000)
+        val isPortrait = (ratioSpinner.selectedItemPosition == 0)
+        val qualityPos = qualitySpinner.selectedItemPosition
+
+        val (width, height, bitrate) = when (qualityPos) {
+            1 -> if (isPortrait) Triple(1080, 1920, 3_500_000) else Triple(1920, 1080, 3_500_000)
+            2 -> if (isPortrait) Triple(480, 854, 1_000_000) else Triple(854, 480, 1_000_000)
+            else -> if (isPortrait) Triple(720, 1280, 2_000_000) else Triple(1280, 720, 2_000_000)
         }
+
         val config = StreamConfig(
             mode = mode,
             rtmpUrl = urlInput.text.toString().trim(),
             streamKey = keyInput.text.toString().trim(),
-            width = width, height = height, videoBitrate = bitrate,
-            echoCanceler = noiseCancelCheckbox.isChecked,
-            noiseSuppressor = noiseCancelCheckbox.isChecked,
+            width = width,
+            height = height,
+            videoBitrate = bitrate,
+            audioBitrate = 128_000,
+            sampleRate = 44100,
+            stereo = false, // Clean Mono without audio jitter
+            echoCanceler = false, // Eliminates choppy audio
+            noiseSuppressor = false,
             fileUri = selectedFileUri,
             loopFile = loopCheckbox.isChecked
         )
+
         val intent = Intent(this, StreamingService::class.java).apply {
             action = StreamingService.ACTION_START
             putExtra(StreamingService.EXTRA_CONFIG, config)
