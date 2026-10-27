@@ -1,361 +1,307 @@
 <?xml version="1.0" encoding="utf-8"?>
 <RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="#0D0F17">
 
-    <!-- 1. FULLSCREEN CAMERA VIEW (Like TikTok & Prism Live) -->
+    <!-- 1. FULLSCREEN CAMERA VIEW -->
     <com.pedro.library.view.OpenGlView
         android:id="@+id/cameraPreview"
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:visibility="visible" />
 
-    <!-- 2. TOP STATUS BAR (Overlay) -->
+    <!-- SCREEN LIVE BACKGROUND (Shows when Screen Mode is selected) -->
     <LinearLayout
-        android:id="@+id/topBar"
+        android:id="@+id/screenModeBg"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#121520"
+        android:gravity="center"
+        android:orientation="vertical"
+        android:visibility="gone">
+        
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="📱"
+            android:textSize="48sp" />
+            
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="SCREEN LIVE MODE"
+            android:textColor="#FFFFFF"
+            android:textSize="20sp"
+            android:textStyle="bold" />
+            
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Ready to cast your screen to viewers"
+            android:textColor="#8E95AA"
+            android:textSize="14sp" />
+    </LinearLayout>
+
+    <!-- 2. TOP HUD (Transparent Status Bar) -->
+    <RelativeLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentTop="true"
-        android:background="#990B0E14"
+        android:background="#66000000"
         android:paddingHorizontal="16dp"
-        android:paddingTop="36dp"
-        android:paddingBottom="10dp"
-        android:orientation="vertical">
+        android:paddingTop="40dp"
+        android:paddingBottom="12dp">
 
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content">
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:text="ONTIK Studio"
-                android:textColor="#FFFFFF"
-                android:textSize="18sp"
-                android:textStyle="bold" />
-
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentStart="true"
+            android:gravity="center_vertical"
+            android:orientation="vertical">
+            
             <LinearLayout
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:gravity="center_vertical"
+                android:background="@drawable/bg_btn_stop"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="2dp"
                 android:orientation="horizontal">
-
+                
                 <TextView
-                    android:id="@+id/liveTimerText"
+                    android:id="@+id/liveStatusText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:text="00:00:00"
-                    android:textColor="#00E676"
-                    android:textSize="13sp"
+                    android:text="READY"
+                    android:textColor="#FFFFFF"
+                    android:textSize="10sp"
                     android:textStyle="bold" />
-
-                <TextView
-                    android:id="@+id/bitrateText"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginStart="10dp"
-                    android:text="0 kbps"
-                    android:textColor="#00E5FF"
-                    android:textSize="12sp" />
             </LinearLayout>
-        </RelativeLayout>
-
-        <RelativeLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp">
 
             <TextView
-                android:id="@+id/statusText"
+                android:id="@+id/liveTimerText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text="Status: Ready"
-                android:textColor="#8E95AA"
-                android:textSize="11sp" />
+                android:layout_marginTop="2dp"
+                android:text="00:00:00"
+                android:textColor="#FFFFFF"
+                android:textSize="14sp"
+                android:textStyle="bold" />
+        </LinearLayout>
 
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_alignParentEnd="true"
+            android:gravity="end"
+            android:orientation="vertical">
+            
             <TextView
                 android:id="@+id/viewersCountText"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:layout_alignParentEnd="true"
-                android:text="👥 Viewers: --"
+                android:text="👥 --"
                 android:textColor="#FFB300"
-                android:textSize="11sp" />
-        </RelativeLayout>
-    </LinearLayout>
+                android:textSize="13sp"
+                android:textStyle="bold" />
 
-    <!-- 3. CAMERA QUICK CONTROLS (Floating on Preview) -->
+            <TextView
+                android:id="@+id/bitrateText"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="0 kbps"
+                android:textColor="#00E676"
+                android:textSize="12sp" />
+        </LinearLayout>
+    </RelativeLayout>
+
+    <!-- 3. RIGHT SIDE QUICK CONTROLS -->
     <LinearLayout
-        android:id="@+id/cameraControlsLayout"
+        android:id="@+id/quickControlsLayout"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:layout_below="@id/topBar"
         android:layout_alignParentEnd="true"
-        android:layout_margin="12dp"
+        android:layout_centerVertical="true"
+        android:layout_marginEnd="16dp"
         android:orientation="vertical">
 
         <Button
             android:id="@+id/switchCameraBtn"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
             android:background="@drawable/bg_btn_mute"
             android:text="🔄"
             android:textColor="#FFFFFF"
-            android:textSize="16sp" />
+            android:textSize="18sp" />
 
         <Button
             android:id="@+id/torchBtn"
-            android:layout_width="44dp"
-            android:layout_height="44dp"
-            android:layout_marginTop="8dp"
+            android:layout_width="46dp"
+            android:layout_height="46dp"
+            android:layout_marginTop="12dp"
             android:background="@drawable/bg_btn_mute"
             android:text="⚡"
             android:textColor="#FFFFFF"
-            android:textSize="16sp" />
-
-        <TextView
-            android:id="@+id/zoomLabel"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:gravity="center"
-            android:text="1.0x"
-            android:textColor="#FFFFFF"
-            android:textSize="10sp" />
-
-        <SeekBar
-            android:id="@+id/zoomSeekBar"
-            android:layout_width="100dp"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:max="40"
-            android:progress="0"
-            android:rotation="270"
-            android:visibility="gone" />
+            android:textSize="18sp" />
     </LinearLayout>
 
-    <!-- 4. BOTTOM CONTROLS & SETTINGS (Semi-Transparent Overlay) -->
-    <ScrollView
+    <!-- 4. BOTTOM ACTION BAR -->
+    <RelativeLayout
+        android:id="@+id/bottomActionbar"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_above="@id/bottomBar"
-        android:layout_marginHorizontal="12dp"
-        android:layout_marginBottom="8dp"
-        android:background="@drawable/bg_card"
-        android:backgroundTint="#B3121520"
-        android:maxHeight="320dp"
-        android:padding="12dp">
+        android:layout_alignParentBottom="true"
+        android:background="#B3000000"
+        android:padding="16dp">
+
+        <Button
+            android:id="@+id/openSettingsBtn"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_alignParentStart="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/bg_btn_mute"
+            android:text="⚙️"
+            android:textSize="20sp" />
+
+        <Button
+            android:id="@+id/goLiveBtn"
+            android:layout_width="match_parent"
+            android:layout_height="56dp"
+            android:layout_centerVertical="true"
+            android:layout_marginHorizontal="16dp"
+            android:layout_toStartOf="@id/micBtn"
+            android:layout_toEndOf="@id/openSettingsBtn"
+            android:background="@drawable/bg_btn_start"
+            android:text="GO LIVE"
+            android:textColor="#FFFFFF"
+            android:textSize="16sp"
+            android:textStyle="bold" />
+
+        <Button
+            android:id="@+id/micBtn"
+            android:layout_width="50dp"
+            android:layout_height="50dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:background="@drawable/bg_btn_mute"
+            android:text="🎙️"
+            android:textSize="18sp" />
+    </RelativeLayout>
+
+    <!-- 5. SETTINGS BOTTOM SHEET (Hidden by default) -->
+    <RelativeLayout
+        android:id="@+id/settingsOverlay"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:background="#99000000"
+        android:visibility="gone">
+        
+        <View
+            android:id="@+id/closeSettingsArea"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_above="@id/settingsPanel" />
 
         <LinearLayout
+            android:id="@+id/settingsPanel"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="vertical">
+            android:layout_alignParentBottom="true"
+            android:background="#1E2235"
+            android:orientation="vertical"
+            android:padding="20dp">
 
             <TextView
-                android:layout_width="wrap_content"
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:text="STREAM SETTINGS"
-                android:textColor="#687390"
-                android:textSize="10sp"
-                android:textStyle="bold" />
+                android:textColor="#FFFFFF"
+                android:textSize="16sp"
+                android:textStyle="bold"
+                android:gravity="center"
+                android:layout_marginBottom="16dp"/>
 
-            <Spinner
-                android:id="@+id/platformSpinner"
+            <LinearLayout
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="4dp"
-                android:background="@drawable/bg_input" />
-
-            <Spinner
-                android:id="@+id/modeSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/bg_input" />
-
-            <Spinner
-                android:id="@+id/ratioSpinner"
-                android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/bg_input" />
+                android:layout_height="40dp"
+                android:orientation="horizontal"
+                android:layout_marginBottom="12dp">
+                
+                <Button
+                    android:id="@+id/tabCamera"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@drawable/bg_btn_start"
+                    android:text="📷 Camera"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp" />
+                    
+                <Button
+                    android:id="@+id/tabScreen"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:layout_marginStart="8dp"
+                    android:background="@drawable/bg_input"
+                    android:text="📱 Screen"
+                    android:textColor="#8E95AA"
+                    android:textSize="12sp" />
+            </LinearLayout>
 
             <Spinner
                 android:id="@+id/qualitySpinner"
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/bg_input" />
+                android:layout_height="44dp"
+                android:background="@drawable/bg_input"
+                android:layout_marginBottom="12dp"/>
 
-            <LinearLayout
+            <Spinner
+                android:id="@+id/ratioSpinner"
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="6dp"
-                android:orientation="horizontal">
-
-                <CheckBox
-                    android:id="@+id/keepScreenOnCheckbox"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
-                    android:text="Awake"
-                    android:textColor="#CAD1E0"
-                    android:textSize="11sp" />
-
-                <CheckBox
-                    android:id="@+id/floatingWidgetCheckbox"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:checked="true"
-                    android:text="Bubble"
-                    android:textColor="#CAD1E0"
-                    android:textSize="11sp" />
-
-                <CheckBox
-                    android:id="@+id/noiseCancelCheckbox"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Noise Filter"
-                    android:textColor="#CAD1E0"
-                    android:textSize="11sp" />
-
-                <CheckBox
-                    android:id="@+id/loopCheckbox"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:text="Loop"
-                    android:textColor="#CAD1E0"
-                    android:textSize="11sp"
-                    android:visibility="gone" />
-            </LinearLayout>
+                android:layout_height="44dp"
+                android:background="@drawable/bg_input"
+                android:layout_marginBottom="12dp"/>
 
             <EditText
                 android:id="@+id/urlInput"
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp"
+                android:layout_height="44dp"
                 android:background="@drawable/bg_input"
                 android:hint="RTMP URL"
-                android:paddingHorizontal="10dp"
                 android:textColor="#FFFFFF"
                 android:textColorHint="#5A627A"
-                android:textSize="12sp" />
+                android:paddingHorizontal="12dp"
+                android:textSize="13sp"
+                android:layout_marginBottom="12dp"/>
 
-            <RelativeLayout
+            <EditText
+                android:id="@+id/keyInput"
                 android:layout_width="match_parent"
-                android:layout_height="38dp"
-                android:layout_marginTop="6dp">
-
-                <EditText
-                    android:id="@+id/keyInput"
-                    android:layout_width="match_parent"
-                    android:layout_height="match_parent"
-                    android:background="@drawable/bg_input"
-                    android:hint="Stream Key"
-                    android:inputType="textPassword"
-                    android:paddingHorizontal="10dp"
-                    android:textColor="#FFFFFF"
-                    android:textColorHint="#5A627A"
-                    android:textSize="12sp" />
-
-                <TextView
-                    android:id="@+id/toggleKeyVisibilityBtn"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_alignParentEnd="true"
-                    android:layout_centerVertical="true"
-                    android:padding="8dp"
-                    android:text="SHOW"
-                    android:textColor="#00E5FF"
-                    android:textSize="10sp"
-                    android:textStyle="bold" />
-            </RelativeLayout>
-
+                android:layout_height="44dp"
+                android:background="@drawable/bg_input"
+                android:hint="Stream Key"
+                android:inputType="textPassword"
+                android:textColor="#FFFFFF"
+                android:textColorHint="#5A627A"
+                android:paddingHorizontal="12dp"
+                android:textSize="13sp"
+                android:layout_marginBottom="16dp"/>
+                
             <Button
                 android:id="@+id/youtubeBtn"
                 android:layout_width="match_parent"
-                android:layout_height="36dp"
-                android:layout_marginTop="6dp"
+                android:layout_height="44dp"
                 android:background="@drawable/bg_btn_youtube"
                 android:text="SIGN IN WITH YOUTUBE"
                 android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                android:textStyle="bold" />
-
-            <Button
-                android:id="@+id/pickFileBtn"
-                android:layout_width="match_parent"
-                android:layout_height="36dp"
-                android:layout_marginTop="6dp"
-                android:background="@drawable/bg_btn_mute"
-                android:text="SELECT VIDEO FILE"
-                android:textColor="#FFFFFF"
-                android:textSize="11sp"
-                android:visibility="gone" />
+                android:textStyle="bold"
+                android:textSize="13sp" />
+                
         </LinearLayout>
-    </ScrollView>
-
-    <!-- 5. BOTTOM ACTION BAR (Start, Pause, Mute, Stop) -->
-    <LinearLayout
-        android:id="@+id/bottomBar"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
-        android:background="#E60D0F17"
-        android:paddingHorizontal="12dp"
-        android:paddingTop="6dp"
-        android:paddingBottom="14dp"
-        android:orientation="horizontal">
-
-        <Button
-            android:id="@+id/startBtn"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_weight="1.2"
-            android:background="@drawable/bg_btn_start"
-            android:text="START"
-            android:textColor="#FFFFFF"
-            android:textSize="14sp"
-            android:textStyle="bold" />
-
-        <Button
-            android:id="@+id/pauseBtn"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_btn_disabled"
-            android:enabled="false"
-            android:text="PAUSE"
-            android:textColor="#888888"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/muteBtn"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_btn_disabled"
-            android:enabled="false"
-            android:text="MUTE"
-            android:textColor="#888888"
-            android:textSize="12sp" />
-
-        <Button
-            android:id="@+id/stopBtn"
-            android:layout_width="0dp"
-            android:layout_height="44dp"
-            android:layout_marginStart="6dp"
-            android:layout_weight="1"
-            android:background="@drawable/bg_btn_disabled"
-            android:enabled="false"
-            android:text="STOP"
-            android:textColor="#888888"
-            android:textSize="12sp" />
-    </LinearLayout>
+    </RelativeLayout>
 
 </RelativeLayout>
