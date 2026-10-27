@@ -68,6 +68,9 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private var isAudioMuted = false
     private var isStreamPaused = false
     private var currentBitrateKbps = 0L
+    
+    // 1. CLAUDE'S VARIABLE: To store the encoder size
+    private var lastEncInfo = "no-screen-mode"
 
     private var reconnectAttempts = 0
     private val maxReconnectAttempts = 5
@@ -152,7 +155,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             } catch (_: Exception) {}
         }
         rtmpCamera2?.let { invokePause(it) }; rtmpDisplay?.let { invokePause(it) }; rtmpFromFile?.let { invokePause(it) }
-        broadcastStatus(if (isStreamPaused) "PAUSED" else "LIVE (CONNECTED)", isLive = true)
+        broadcastStatus(if (isStreamPaused) "PAUSED" else "LIVE $lastEncInfo", isLive = true)
         updateFloatingStats()
     }
 
@@ -165,7 +168,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             streamer.javaClass.getMethod(method).invoke(streamer)
         } catch (_: Exception) {}
         updateFloatingStats()
-        broadcastStatus(if (isAudioMuted) "MIC MUTED" else "LIVE (CONNECTED)", isLive = true)
+        broadcastStatus(if (isAudioMuted) "MIC MUTED" else "LIVE $lastEncInfo", isLive = true)
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -176,7 +179,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         try {
             windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE
-            
             val params = WindowManager.LayoutParams(WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT, layoutType, WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE, PixelFormat.TRANSLUCENT).apply { gravity = Gravity.TOP or Gravity.START; x = 30; y = 180 }
             val density = resources.displayMetrics.density
             val rootLayout = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; gravity = Gravity.START }
@@ -269,7 +271,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
     private fun startStreaming(config: StreamConfig, intent: Intent) {
         acquireWakeAndWifiLocks(); NotificationHelper.createChannel(this)
-
         val fgsType = if (Build.VERSION.SDK_INT >= 34) {
             when (config.mode) {
                 StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
@@ -321,7 +322,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             setIntentResult(resultCode, resultData) 
             
-            // 🔥 CLAUDE'S PERFECT LOGIC: REAL METRICS PRESERVING RATIO 🔥
             val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
             val dm = android.util.DisplayMetrics()
             @Suppress("DEPRECATION")
@@ -333,15 +333,17 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val maxLong = maxOf(config.width, config.height).toFloat()
             val maxShort = minOf(config.width, config.height).toFloat()
 
-            // Calculate scale preserving the real device aspect ratio
             val scale = if (sh >= sw) minOf(maxLong / sh, maxShort / sw) else minOf(maxLong / sw, maxShort / sh)
 
             var encW = (sw * scale).toInt()
             var encH = (sh * scale).toInt()
             
-            // Ensure hardware encoders get even numbers (and.inv() logic)
             encW -= (encW % 2)
             encH -= (encH % 2)
+            
+            // 2. CLAUDE'S DIAGNOSTIC: Update the variable right after calculating dimensions
+            lastEncInfo = "${encW}x${encH} (scrn ${sw.toInt()}x${sh.toInt()})"
+            Log.i(TAG, "ENC SIZE: $lastEncInfo")
 
             val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, dm.densityDpi)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
@@ -408,7 +410,10 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     override fun onVideoDecoderFinished() {}
     override fun onAudioDecoderFinished() {}
     override fun onConnectionStarted(url: String) {}
-    override fun onConnectionSuccess() { reconnectAttempts = 0; broadcastStatus("LIVE (CONNECTED)", isLive = true) }
+    
+    // 3. CLAUDE'S CONNECTION STATUS: Broadcast the encoder size instead of just "CONNECTED"
+    override fun onConnectionSuccess() { reconnectAttempts = 0; broadcastStatus("LIVE $lastEncInfo", isLive = true) }
+    
     override fun onConnectionFailed(reason: String) { handleAutoReconnect(reason) }
     override fun onNewBitrate(bitrate: Long) { broadcastBitrate(bitrate / 1000) }
     override fun onDisconnect() { if (isStreamingActive) handleAutoReconnect("NETWORK DROP") }
