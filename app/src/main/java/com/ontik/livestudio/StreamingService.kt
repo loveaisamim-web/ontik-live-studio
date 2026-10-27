@@ -152,11 +152,28 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         } catch (_: Exception) {}
     }
 
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ONTIKLiveStudio::StreamWakeLock").apply {
+                setReferenceCounted(false)
+                acquire(12 * 60 * 60 * 1000L)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "WakeLock error: ${e.message}")
+        }
+    }
+
+    private fun releaseWakeLock() {
+        try {
+            wakeLock?.let { if (it.isHeld) it.release() }
+        } catch (_: Exception) {}
+        wakeLock = null
+    }
+
     @SuppressLint("ClickableViewAccessibility")
     private fun showFloatingWidget() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            return
-        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) return
         if (floatingWidgetView != null) return
 
         try {
@@ -188,7 +205,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 gravity = Gravity.CENTER_VERTICAL
             }
 
-            // Small Round Floating Bubble Icon
             val bubbleIcon = TextView(this).apply {
                 layoutParams = LinearLayout.LayoutParams(bubbleSize, bubbleSize)
                 gravity = Gravity.CENTER
@@ -201,7 +217,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 }
             }
 
-            // Collapsible Menu Pill
             val menuPill = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
@@ -261,7 +276,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             rootLayout.addView(bubbleIcon)
             rootLayout.addView(menuPill)
 
-            // Drag vs Click Detection with Auto-fade
             bubbleIcon.setOnTouchListener(object : View.OnTouchListener {
                 private var initialX = 0
                 private var initialY = 0
@@ -312,46 +326,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         floatingWidgetView = null
         floatingMenuLayout = null
         floatingMuteBtn = null
-    }
-
-    private fun getCameraRotation(): Int {
-        return try {
-            com.pedro.encoder.input.video.CameraHelper.getCameraOrientation(this)
-        } catch (_: Throwable) {
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            val rot = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                display?.rotation ?: Surface.ROTATION_0
-            } else {
-                @Suppress("DEPRECATION")
-                wm.defaultDisplay.rotation
-            }
-            when (rot) {
-                Surface.ROTATION_0 -> 90
-                Surface.ROTATION_90 -> 0
-                Surface.ROTATION_180 -> 270
-                Surface.ROTATION_270 -> 180
-                else -> 90
-            }
-        }
-    }
-
-    private fun acquireWakeLock() {
-        try {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ONTIKLiveStudio::StreamWakeLock").apply {
-                setReferenceCounted(false)
-                acquire(12 * 60 * 60 * 1000L)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "WakeLock error: ${e.message}")
-        }
-    }
-
-    private fun releaseWakeLock() {
-        try {
-            wakeLock?.let { if (it.isHeld) it.release() }
-        } catch (_: Exception) {}
-        wakeLock = null
     }
 
     private fun switchCamera() {
@@ -483,11 +457,17 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             RtmpCamera2(this, this)
         }
 
-        val rotation = getCameraRotation()
+        // PERFECT ASPECT RATIO FIX:
+        // Always pass Landscape dimensions (e.g. 1920x1080) to prepareVideo,
+        // and enforce 90 degree rotation if Portrait (9:16) is requested.
+        val isPortrait = config.width < config.height
+        val camW = if (isPortrait) config.height else config.width
+        val camH = if (isPortrait) config.width else config.height
+        val targetRotation = if (isPortrait) 90 else 0
 
         rtmpCamera2?.apply {
             getStreamClient().setReTries(0)
-            prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 2, rotation)
+            prepareVideo(camW, camH, config.fps, config.videoBitrate, 2, targetRotation)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             startStream(config.fullRtmpUrl)
         }
@@ -505,6 +485,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             getStreamClient().setReTries(0)
             setIntentResult(resultCode, resultData)
+            
+            // Screen capture accepts exact dimensions, no hardware rotation swap needed
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             startStream(config.fullRtmpUrl)
