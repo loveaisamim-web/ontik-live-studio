@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
@@ -413,7 +414,18 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             getStreamClient().setReTries(0)
             setIntentResult(resultCode, resultData)
-            prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
+
+            val isPortraitMode = config.width < config.height
+            val currentOrientation = resources.configuration.orientation
+            val isDevicePortrait = currentOrientation == Configuration.ORIENTATION_PORTRAIT
+
+            val rot = if (isPortraitMode) {
+                if (isDevicePortrait) 0 else 90
+            } else {
+                if (isDevicePortrait) 90 else 0
+            }
+
+            prepareVideo(config.width, config.height, config.fps, config.videoBitrate, rot, 320)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             startStream(config.fullRtmpUrl)
         }
