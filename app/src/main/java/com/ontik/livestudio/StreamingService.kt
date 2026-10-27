@@ -296,7 +296,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun startCamera(config: StreamConfig) {
         ensureCameraPreviewRunning()
         val cam = rtmpCamera2 ?: return
-        
         val isPortrait = config.width < config.height
         val encW = if (isPortrait) config.height else config.width
         val encH = if (isPortrait) config.width else config.height
@@ -305,12 +304,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         val videoOk = cam.prepareVideo(encW, encH, config.fps, config.videoBitrate, 2, rot)
         val audioOk = cam.prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
         
-        if (videoOk && audioOk) {
-            cam.startStream(config.fullRtmpUrl)
-        } else {
-            broadcastStatus("CAMERA ENCODER FAILED")
-            stopStreaming(keepPreview = true)
-        }
+        if (videoOk && audioOk) cam.startStream(config.fullRtmpUrl)
+        else { broadcastStatus("CAMERA ENCODER FAILED"); stopStreaming(keepPreview = true) }
     }
 
     private fun startScreen(config: StreamConfig, intent: Intent) {
@@ -326,37 +321,32 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             setIntentResult(resultCode, resultData) 
             
-            // 🔥 100% YOUTUBE SHORTS FIX 🔥
-            // ALWAYS SEND EXACT RESOLUTION (e.g. 1080x1920). 
-            // If you change this math, YouTube will throw it into a 16:9 player as a small square!
-            val encW = config.width
-            val encH = config.height
-            val dpi = resources.displayMetrics.densityDpi
+            // 🔥 CLAUDE'S PERFECT LOGIC: REAL METRICS PRESERVING RATIO 🔥
+            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val dm = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(dm)
 
-            val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, dpi)
+            val sw = dm.widthPixels.toFloat()
+            val sh = dm.heightPixels.toFloat()
+            
+            val maxLong = maxOf(config.width, config.height).toFloat()
+            val maxShort = minOf(config.width, config.height).toFloat()
+
+            // Calculate scale preserving the real device aspect ratio
+            val scale = if (sh >= sw) minOf(maxLong / sh, maxShort / sw) else minOf(maxLong / sw, maxShort / sh)
+
+            var encW = (sw * scale).toInt()
+            var encH = (sh * scale).toInt()
+            
+            // Ensure hardware encoders get even numbers (and.inv() logic)
+            encW -= (encW % 2)
+            encH -= (encH % 2)
+
+            val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, dm.densityDpi)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             
             if (videoOk && audioOk) {
-                // Prevent squashing internally using OpenGL AspectRatioMode.ADJUST
-                try {
-                    val gl = javaClass.getMethod("getGlInterface").invoke(this)
-                    if (gl != null) {
-                        var modeClass: Class<*>? = null
-                        try { modeClass = Class.forName("com.pedro.encoder.utils.gl.AspectRatioMode") } catch (_: Exception) {}
-                        if (modeClass == null) {
-                            try { modeClass = Class.forName("com.pedro.library.view.AspectRatioMode") } catch (_: Exception) {}
-                        }
-                        if (modeClass != null) {
-                            val adjustMode = modeClass.enumConstants?.firstOrNull { it.toString() == "ADJUST" }
-                            if (adjustMode != null) {
-                                gl.javaClass.getMethod("setAspectRatioMode", modeClass).invoke(gl, adjustMode)
-                            }
-                        }
-                    }
-                } catch (e: Exception) {
-                    Log.e(TAG, "Aspect Ratio Mode Error: ${e.message}")
-                }
-
                 startStream(config.fullRtmpUrl)
             } else {
                 broadcastStatus("SCREEN ENCODER ERROR")
