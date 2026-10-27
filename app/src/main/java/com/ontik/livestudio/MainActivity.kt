@@ -8,11 +8,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.graphics.Color
 import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.graphics.Color
 import android.os.SystemClock
 import android.provider.Settings
 import android.text.InputType
@@ -186,15 +186,12 @@ class MainActivity : AppCompatActivity() {
 
         urlInput.setText(prefs.rtmpUrl.ifEmpty { "rtmp://a.rtmp.youtube.com/live2" }); keyInput.setText(prefs.streamKey)
 
-        // Settings Overlay Logic
         openSettingsBtn.setOnClickListener { settingsOverlay.visibility = View.VISIBLE }
         closeSettingsArea.setOnClickListener { settingsOverlay.visibility = View.GONE; prefs.rtmpUrl = urlInput.text.toString(); prefs.streamKey = keyInput.text.toString() }
 
-        // Tabs Logic
         tabCamera.setOnClickListener { switchMode(StreamMode.CAMERA) }
         tabScreen.setOnClickListener { switchMode(StreamMode.SCREEN) }
 
-        // Go Live Logic
         goLiveBtn.setOnClickListener {
             if (isStreamingActive) {
                 startService(Intent(this, StreamingService::class.java).setAction(StreamingService.ACTION_STOP))
@@ -215,21 +212,28 @@ class MainActivity : AppCompatActivity() {
         val filter = IntentFilter(StreamingService.ACTION_STATUS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(statusReceiver, filter)
         
-        // Initial state
         switchMode(StreamMode.CAMERA)
     }
 
     private fun switchMode(mode: StreamMode) {
         currentMode = mode
         if (mode == StreamMode.CAMERA) {
-            tabCamera.setBackgroundResource(R.drawable.bg_btn_start); tabCamera.setTextColor(Color.WHITE)
-            tabScreen.setBackgroundResource(R.drawable.bg_input); tabScreen.setTextColor(Color.parseColor("#8E95AA"))
-            cameraPreview.visibility = View.VISIBLE; screenModeBg.visibility = View.GONE; quickControlsLayout.visibility = View.VISIBLE
+            tabCamera.setBackgroundResource(R.drawable.bg_btn_start)
+            tabCamera.setTextColor(Color.WHITE)
+            tabScreen.setBackgroundResource(R.drawable.bg_input)
+            tabScreen.setTextColor(Color.parseColor("#8E95AA"))
+            cameraPreview.visibility = View.VISIBLE
+            screenModeBg.visibility = View.GONE
+            quickControlsLayout.visibility = View.VISIBLE
             checkCameraPermissionAndStart()
         } else {
-            tabScreen.setBackgroundResource(R.drawable.bg_btn_start); tabScreen.setTextColor(Color.WHITE)
-            tabCamera.setBackgroundResource(R.drawable.bg_input); tabCamera.setTextColor(Color.parseColor("#8E95AA"))
-            cameraPreview.visibility = View.GONE; screenModeBg.visibility = View.VISIBLE; quickControlsLayout.visibility = View.GONE
+            tabScreen.setBackgroundResource(R.drawable.bg_btn_start)
+            tabScreen.setTextColor(Color.WHITE)
+            tabCamera.setBackgroundResource(R.drawable.bg_input)
+            tabCamera.setTextColor(Color.parseColor("#8E95AA"))
+            cameraPreview.visibility = View.GONE
+            screenModeBg.visibility = View.VISIBLE
+            quickControlsLayout.visibility = View.GONE
             stopCameraPreview()
         }
     }
