@@ -12,6 +12,7 @@ import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.graphics.Color
 import android.os.SystemClock
 import android.provider.Settings
 import android.text.InputType
