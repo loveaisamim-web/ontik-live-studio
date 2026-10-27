@@ -14,6 +14,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
 import android.provider.Settings
+import android.text.InputType
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
@@ -36,6 +37,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var loopCheckbox: CheckBox
     private lateinit var urlInput: EditText
     private lateinit var keyInput: EditText
+    private lateinit var toggleKeyVisibilityBtn: TextView
     private lateinit var startBtn: Button
     private lateinit var muteBtn: Button
     private lateinit var stopBtn: Button
@@ -58,6 +60,7 @@ class MainActivity : AppCompatActivity() {
 
     private var timerJob: Job? = null
     private var streamStartTime: Long = 0L
+    private var isPasswordVisible = false
 
     private val statusReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -83,13 +86,42 @@ class MainActivity : AppCompatActivity() {
                 }
             }
 
-            if (isLive && timerJob == null) {
-                startTimer()
-            } else if (!isLive && msg?.contains("stopped", ignoreCase = true) == true) {
+            if (isLive) {
+                updateUiForStreamingState(true)
+                if (timerJob == null) startTimer()
+            } else if (msg?.contains("stopped", ignoreCase = true) == true || msg?.contains("failed", ignoreCase = true) == true) {
+                updateUiForStreamingState(false)
                 stopTimer()
-                muteBtn.text = "Mute Mic"
-                window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
+        }
+    }
+
+    private fun updateUiForStreamingState(isStreaming: Boolean) {
+        if (isStreaming) {
+            startBtn.isEnabled = false
+            startBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
+            startBtn.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+
+            muteBtn.isEnabled = true
+            muteBtn.setBackgroundResource(R.drawable.bg_btn_mute)
+            muteBtn.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+
+            stopBtn.isEnabled = true
+            stopBtn.setBackgroundResource(R.drawable.bg_btn_stop)
+            stopBtn.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+        } else {
+            startBtn.isEnabled = true
+            startBtn.setBackgroundResource(R.drawable.bg_btn_start)
+            startBtn.setTextColor(ContextCompat.getColor(this, android.R.color.white))
+
+            muteBtn.isEnabled = false
+            muteBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
+            muteBtn.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            muteBtn.text = "Mute Mic"
+
+            stopBtn.isEnabled = false
+            stopBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
+            stopBtn.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
         }
     }
 
@@ -187,32 +219,46 @@ class MainActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        platformSpinner        = findViewById(R.id.platformSpinner)
-        modeSpinner            = findViewById(R.id.modeSpinner)
-        ratioSpinner           = findViewById(R.id.ratioSpinner)
-        qualitySpinner         = findViewById(R.id.qualitySpinner)
-        floatingWidgetCheckbox = findViewById(R.id.floatingWidgetCheckbox)
-        keepScreenOnCheckbox   = findViewById(R.id.keepScreenOnCheckbox)
-        noiseCancelCheckbox    = findViewById(R.id.noiseCancelCheckbox)
-        loopCheckbox           = findViewById(R.id.loopCheckbox)
-        urlInput               = findViewById(R.id.urlInput)
-        keyInput               = findViewById(R.id.keyInput)
-        startBtn               = findViewById(R.id.startBtn)
-        muteBtn                = findViewById(R.id.muteBtn)
-        stopBtn                = findViewById(R.id.stopBtn)
-        switchCameraBtn        = findViewById(R.id.switchCameraBtn)
-        torchBtn               = findViewById(R.id.torchBtn)
-        zoomSeekBar            = findViewById(R.id.zoomSeekBar)
-        zoomLabel              = findViewById(R.id.zoomLabel)
-        youtubeBtn             = findViewById(R.id.youtubeBtn)
-        pickFileBtn            = findViewById(R.id.pickFileBtn)
-        statusText             = findViewById(R.id.statusText)
-        liveTimerText          = findViewById(R.id.liveTimerText)
-        bitrateText            = findViewById(R.id.bitrateText)
-        cameraPreview          = findViewById(R.id.cameraPreview)
-        cameraControlsLayout   = findViewById(R.id.cameraControlsLayout)
+        platformSpinner         = findViewById(R.id.platformSpinner)
+        modeSpinner             = findViewById(R.id.modeSpinner)
+        ratioSpinner            = findViewById(R.id.ratioSpinner)
+        qualitySpinner          = findViewById(R.id.qualitySpinner)
+        floatingWidgetCheckbox  = findViewById(R.id.floatingWidgetCheckbox)
+        keepScreenOnCheckbox    = findViewById(R.id.keepScreenOnCheckbox)
+        noiseCancelCheckbox     = findViewById(R.id.noiseCancelCheckbox)
+        loopCheckbox            = findViewById(R.id.loopCheckbox)
+        urlInput                = findViewById(R.id.urlInput)
+        keyInput                = findViewById(R.id.keyInput)
+        toggleKeyVisibilityBtn  = findViewById(R.id.toggleKeyVisibilityBtn)
+        startBtn                = findViewById(R.id.startBtn)
+        muteBtn                 = findViewById(R.id.muteBtn)
+        stopBtn                 = findViewById(R.id.stopBtn)
+        switchCameraBtn         = findViewById(R.id.switchCameraBtn)
+        torchBtn                = findViewById(R.id.torchBtn)
+        zoomSeekBar             = findViewById(R.id.zoomSeekBar)
+        zoomLabel               = findViewById(R.id.zoomLabel)
+        youtubeBtn              = findViewById(R.id.youtubeBtn)
+        pickFileBtn             = findViewById(R.id.pickFileBtn)
+        statusText              = findViewById(R.id.statusText)
+        liveTimerText           = findViewById(R.id.liveTimerText)
+        bitrateText             = findViewById(R.id.bitrateText)
+        cameraPreview           = findViewById(R.id.cameraPreview)
+        cameraControlsLayout    = findViewById(R.id.cameraControlsLayout)
 
         StreamingService.openGlView = cameraPreview
+
+        // Show/Hide Stream Key
+        toggleKeyVisibilityBtn.setOnClickListener {
+            isPasswordVisible = !isPasswordVisible
+            if (isPasswordVisible) {
+                keyInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                toggleKeyVisibilityBtn.text = "HIDE"
+            } else {
+                keyInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+                toggleKeyVisibilityBtn.text = "SHOW"
+            }
+            keyInput.setSelection(keyInput.text.length)
+        }
 
         zoomSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
@@ -229,7 +275,6 @@ class MainActivity : AppCompatActivity() {
             true
         }
 
-        // Custom White Text Adapters for all Spinners
         fun createSpinnerAdapter(items: List<String>): ArrayAdapter<String> {
             return ArrayAdapter(this, R.layout.item_spinner, items).apply {
                 setDropDownViewResource(R.layout.item_spinner_dropdown)
@@ -336,8 +381,8 @@ class MainActivity : AppCompatActivity() {
                     .setAction(StreamingService.ACTION_STOP)
             )
             stopTimer()
+            updateUiForStreamingState(false)
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            muteBtn.text = "Mute Mic"
             statusText.text = "Status: Stopping stream..."
         }
 

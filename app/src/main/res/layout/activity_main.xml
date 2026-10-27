@@ -13,7 +13,7 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <!-- Top Header & Live HUD Glass Card -->
+        <!-- Top Live HUD Glass Card -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -135,7 +135,7 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Stream Configuration Glass Card -->
+        <!-- Stream Configuration Card -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -228,7 +228,7 @@
                 android:text="Pick Video File" />
         </LinearLayout>
 
-        <!-- RTMP Settings Glass Card -->
+        <!-- RTMP Settings Card -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -259,19 +259,39 @@
                 android:inputType="textUri"
                 android:importantForAutofill="no" />
 
-            <EditText
-                android:id="@+id/keyInput"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="42dp"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/bg_glass_input"
-                android:hint="Stream Key"
-                android:textColorHint="#4E556D"
-                android:textColor="#FFFFFF"
-                android:textSize="12sp"
-                android:paddingHorizontal="10dp"
-                android:inputType="textPassword"
-                android:importantForAutofill="no" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <EditText
+                    android:id="@+id/keyInput"
+                    android:layout_width="0dp"
+                    android:layout_height="match_parent"
+                    android:layout_weight="1"
+                    android:background="@null"
+                    android:hint="Stream Key"
+                    android:textColorHint="#4E556D"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
+                    android:paddingHorizontal="10dp"
+                    android:inputType="textPassword"
+                    android:importantForAutofill="no" />
+
+                <TextView
+                    android:id="@+id/toggleKeyVisibilityBtn"
+                    android:layout_width="wrap_content"
+                    android:layout_height="match_parent"
+                    android:gravity="center"
+                    android:paddingHorizontal="12dp"
+                    android:text="SHOW"
+                    android:textColor="#6C7594"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
 
             <Button
                 android:id="@+id/youtubeBtn"
@@ -284,7 +304,7 @@
                 android:text="Sign In With YouTube" />
         </LinearLayout>
 
-        <!-- Bottom Rounded Action Buttons -->
+        <!-- Bottom Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -307,8 +327,9 @@
                 android:layout_height="46dp"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/bg_btn_mute"
-                android:textColor="#FFFFFF"
+                android:background="@drawable/bg_btn_disabled"
+                android:textColor="#6C7594"
+                android:enabled="false"
                 android:text="Mute Mic" />
 
             <Button
@@ -317,8 +338,9 @@
                 android:layout_height="46dp"
                 android:layout_weight="1"
                 android:layout_marginStart="8dp"
-                android:background="@drawable/bg_btn_stop"
-                android:textColor="#FFFFFF"
+                android:background="@drawable/bg_btn_disabled"
+                android:textColor="#6C7594"
+                android:enabled="false"
                 android:textStyle="bold"
                 android:text="Stop" />
         </LinearLayout>
