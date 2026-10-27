@@ -1,76 +1,131 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:padding="16dp">
-
-    <TextView
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="ONTIK Live Studio"
-        android:textSize="24sp"
-        android:textStyle="bold" />
-
-    <Spinner
-        android:id="@+id/modeSpinner"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp" />
-
-    <EditText
-        android:id="@+id/urlInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="RTMP URL"
-        android:inputType="textUri"
-        android:importantForAutofill="no" />
-
-    <EditText
-        android:id="@+id/keyInput"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:hint="Stream key"
-        android:inputType="textPassword"
-        android:importantForAutofill="no" />
-
-    <Button
-        android:id="@+id/youtubeBtn"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Sign in with YouTube" />
-
-    <Button
-        android:id="@+id/pickFileBtn"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:text="Pick video file (for File mode)" />
+    android:fillViewport="true">
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:layout_marginTop="16dp">
+        android:orientation="vertical"
+        android:padding="16dp">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="ONTIK Live Studio"
+            android:textSize="22sp"
+            android:textStyle="bold" />
+
+        <!-- Source Mode -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="Stream Source:"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/modeSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
+        <!-- Aspect Ratio -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Aspect Ratio / Orientation:"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/ratioSpinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
+        <!-- Video Quality -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="Video Resolution &amp; Quality:"
+            android:textStyle="bold" />
+
+        <Spinner
+            android:id="@+id/qualitySpinner"
+            android:layout_width="match_parent"
+            android:layout_height="48dp" />
+
+        <!-- File Loop Checkbox -->
+        <CheckBox
+            android:id="@+id/loopCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:checked="true"
+            android:text="Loop Video Continuously (File Mode)" />
 
         <Button
-            android:id="@+id/startBtn"
-            android:layout_width="0dp"
+            android:id="@+id/pickFileBtn"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Start" />
+            android:layout_marginTop="6dp"
+            android:text="Pick Video File" />
+
+        <!-- RTMP Settings -->
+        <EditText
+            android:id="@+id/urlInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="RTMP Ingest URL"
+            android:inputType="textUri"
+            android:importantForAutofill="no" />
+
+        <EditText
+            android:id="@+id/keyInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="Stream Key"
+            android:inputType="textPassword"
+            android:importantForAutofill="no" />
 
         <Button
-            android:id="@+id/stopBtn"
-            android:layout_width="0dp"
+            android:id="@+id/youtubeBtn"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_weight="1"
-            android:text="Stop" />
+            android:layout_marginTop="6dp"
+            android:text="Sign in with YouTube" />
+
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="16dp">
+
+            <Button
+                android:id="@+id/startBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Start Stream" />
+
+            <Button
+                android:id="@+id/stopBtn"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:layout_marginStart="8dp"
+                android:text="Stop Stream" />
+        </LinearLayout>
+
+        <TextView
+            android:id="@+id/statusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="Status: Ready"
+            android:textStyle="bold" />
+
     </LinearLayout>
-
-    <TextView
-        android:id="@+id/statusText"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="16dp"
-        android:text="Idle" />
-</LinearLayout>
+</ScrollView>

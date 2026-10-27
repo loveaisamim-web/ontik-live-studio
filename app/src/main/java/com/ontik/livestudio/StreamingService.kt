@@ -3,6 +3,7 @@ package com.ontik.livestudio
 import android.app.Service
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
@@ -18,6 +19,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     companion object {
         const val ACTION_START = "com.ontik.START"
         const val ACTION_STOP  = "com.ontik.STOP"
+        const val ACTION_STATUS = "com.ontik.STREAM_STATUS"
+        const val EXTRA_STATUS_MSG = "status_message"
         const val EXTRA_CONFIG = "config"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
@@ -42,20 +45,44 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         return START_NOT_STICKY
     }
 
+    private fun broadcastStatus(msg: String) {
+        val intent = Intent(ACTION_STATUS).apply {
+            putExtra(EXTRA_STATUS_MSG, msg)
+            setPackage(packageName)
+        }
+        sendBroadcast(intent)
+    }
+
     private fun startStreaming(config: StreamConfig, intent: Intent) {
         NotificationHelper.createChannel(this)
-        val fgsType = when (config.mode) {
-            StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-            StreamMode.FILE -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+
+        val fgsType = if (Build.VERSION.SDK_INT >= 34) {
+            when (config.mode) {
+                StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.FILE -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
+            }
+        } else if (Build.VERSION.SDK_INT >= 29) {
+            when (config.mode) {
+                StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
+                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.FILE -> 0
+            }
+        } else {
+            0
         }
+
         ServiceCompat.startForeground(
             this, NotificationHelper.id(),
             NotificationHelper.build(this, "Streaming ${config.mode.name.lowercase()}..."),
             fgsType
         )
+
+        broadcastStatus("Initializing ${config.mode.name.lowercase()} stream...")
 
         when (config.mode) {
             StreamMode.CAMERA -> startCamera(config)
@@ -78,7 +105,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         @Suppress("DEPRECATION")
         val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
         if (resultData == null) {
-            Log.e(TAG, "Missing projection result data")
+            broadcastStatus("Screen capture data missing")
             stopStreaming()
             return
         }
@@ -94,7 +121,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun startFile(config: StreamConfig) {
         val path = config.fileUri
         if (path.isNullOrBlank()) {
-            Log.e(TAG, "No file path")
+            broadcastStatus("No video file selected")
             stopStreaming()
             return
         }
@@ -109,7 +136,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val videoPrepared = prepareVideo(this@StreamingService, uri)
             val audioPrepared = prepareAudio(this@StreamingService, uri)
             if (!videoPrepared && !audioPrepared) {
-                Log.e(TAG, "Could not prepare selected media file")
+                broadcastStatus("Unable to prepare video file")
                 stopStreaming()
                 return
             }
@@ -126,6 +153,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = null
         rtmpFromFile = null
         ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
+        broadcastStatus("Stream stopped")
         stopSelf()
     }
 
@@ -133,11 +161,26 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
     override fun onVideoDecoderFinished() {}
     override fun onAudioDecoderFinished() {}
-    override fun onConnectionStarted(url: String) { Log.d(TAG, "Connecting: $url") }
-    override fun onConnectionSuccess() { Log.d(TAG, "Connected") }
-    override fun onConnectionFailed(reason: String) { Log.e(TAG, "Failed: $reason") }
+    override fun onConnectionStarted(url: String) { 
+        Log.d(TAG, "Connecting: $url")
+        broadcastStatus("Connecting to RTMP...")
+    }
+    override fun onConnectionSuccess() { 
+        Log.d(TAG, "Connected")
+        broadcastStatus("Live: Connected successfully")
+    }
+    override fun onConnectionFailed(reason: String) { 
+        Log.e(TAG, "Failed: $reason")
+        broadcastStatus("Connection failed: $reason")
+    }
     override fun onNewBitrate(bitrate: Long) {}
-    override fun onDisconnect() { Log.d(TAG, "Disconnected") }
-    override fun onAuthError() { Log.e(TAG, "Auth error") }
+    override fun onDisconnect() { 
+        Log.d(TAG, "Disconnected")
+        broadcastStatus("Disconnected from server")
+    }
+    override fun onAuthError() { 
+        Log.e(TAG, "Auth error")
+        broadcastStatus("RTMP Authentication failed")
+    }
     override fun onAuthSuccess() {}
 }
