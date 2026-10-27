@@ -512,7 +512,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
         rtmpCamera2?.apply {
             getStreamClient().setReTries(5)
-            getStreamClient().setLogs(false)
             val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 2, rot)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             if (videoOk && audioOk) {
@@ -536,12 +535,10 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             getStreamClient().setReTries(5)
-            getStreamClient().setLogs(false)
             
-            // 1. MUST set intent result BEFORE prepareVideo!
+            // MUST set intent result BEFORE prepareVideo!
             setIntentResult(resultCode, resultData)
             
-            // 2. Prepare video with exact dimensions and 0 rotation
             val videoOk = prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             
@@ -569,18 +566,10 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun handleAutoReconnect(reason: String) {
         if (!isStreamingActive || activeConfig == null) return
 
-        // Use built-in RootEncoder reTry first
-        val client = rtmpCamera2?.streamClient ?: rtmpDisplay?.streamClient ?: rtmpFromFile?.streamClient
-        if (client != null && client.shouldRetry(reason)) {
-            reconnectAttempts++
-            broadcastStatus("Reconnecting ($reconnectAttempts/5)...", isLive = true)
-            client.reTry(2500, reason, null)
-            return
-        }
-
+        // 100% safe manual reconnection loop without relying on invalid shouldRetry() APIs
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++
-            broadcastStatus("Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
+            broadcastStatus("Dropped ($reason). Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
             reconnectJob?.cancel()
             reconnectJob = serviceScope.launch {
                 delay(3000)
