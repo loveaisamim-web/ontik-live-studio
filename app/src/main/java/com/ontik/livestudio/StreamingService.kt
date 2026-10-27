@@ -36,14 +36,18 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         const val ACTION_START = "com.ontik.START"
         const val ACTION_STOP  = "com.ontik.STOP"
         const val ACTION_TOGGLE_MUTE = "com.ontik.TOGGLE_MUTE"
+        const val ACTION_TOGGLE_PAUSE = "com.ontik.TOGGLE_PAUSE"
         const val ACTION_SWITCH_CAMERA = "com.ontik.SWITCH_CAMERA"
         const val ACTION_TOGGLE_TORCH = "com.ontik.TOGGLE_TORCH"
         const val ACTION_SET_ZOOM = "com.ontik.SET_ZOOM"
+        const val ACTION_UPDATE_VIEWERS = "com.ontik.UPDATE_VIEWERS"
         const val ACTION_STATUS = "com.ontik.STREAM_STATUS"
         const val EXTRA_STATUS_MSG = "status_message"
         const val EXTRA_BITRATE = "bitrate_kbps"
         const val EXTRA_IS_LIVE = "is_live"
         const val EXTRA_IS_MUTED = "is_muted"
+        const val EXTRA_IS_PAUSED = "is_paused"
+        const val EXTRA_VIEWERS = "viewers_count"
         const val EXTRA_CONFIG = "config"
         const val EXTRA_RESULT_CODE = "result_code"
         const val EXTRA_RESULT_DATA = "result_data"
@@ -54,13 +58,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         var openGlView: OpenGlView? = null
         private var activeServiceInstance: StreamingService? = null
 
-        fun setCameraZoom(level: Float) {
-            activeServiceInstance?.applyCameraZoom(level)
-        }
-
-        fun handleCameraTouch(event: MotionEvent) {
-            activeServiceInstance?.applyCameraTouch(event)
-        }
+        fun setCameraZoom(level: Float) { activeServiceInstance?.applyCameraZoom(level) }
+        fun handleCameraTouch(event: MotionEvent) { activeServiceInstance?.applyCameraTouch(event) }
     }
 
     private var rtmpCamera2: RtmpCamera2? = null
@@ -70,28 +69,35 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private var activeConfig: StreamConfig? = null
     private var isStreamingActive = false
     private var isAudioMuted = false
+    private var isStreamPaused = false
+    private var currentViewers = 0L
+    private var currentBitrateKbps = 0L
+
     private var reconnectAttempts = 0
     private val maxReconnectAttempts = 5
     private val serviceScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var reconnectJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
-    // Floating Bubble & Menu
+    // Floating Dashboard Elements
     private var windowManager: WindowManager? = null
     private var floatingWidgetView: View? = null
-    private var floatingMenuLayout: LinearLayout? = null
-    private var floatingMuteBtn: Button? = null
+    private var floatingDetailsCard: LinearLayout? = null
+    private var floatViewersText: TextView? = null
+    private var floatBitrateText: TextView? = null
+    private var floatPauseBtn: Button? = null
+    private var floatMuteBtn: Button? = null
     private val uiHandler = Handler(Looper.getMainLooper())
-    private var isMenuExpanded = false
+    private var isDetailsOpen = false
 
     private val autoFadeRunnable = Runnable {
-        floatingWidgetView?.animate()?.alpha(0.25f)?.setDuration(400)?.start()
+        floatingWidgetView?.animate()?.alpha(0.28f)?.setDuration(400)?.start()
     }
 
     private fun resetAutoFadeTimer() {
         uiHandler.removeCallbacks(autoFadeRunnable)
         floatingWidgetView?.animate()?.alpha(1.0f)?.setDuration(150)?.start()
-        uiHandler.postDelayed(autoFadeRunnable, 2000)
+        uiHandler.postDelayed(autoFadeRunnable, 3000)
     }
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -111,19 +117,23 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                     activeConfig = config
                     isStreamingActive = true
                     isAudioMuted = false
+                    isStreamPaused = false
                     reconnectAttempts = 0
                     startStreaming(config, intent)
-                    if (config.mode == StreamMode.SCREEN && enableFloating) {
-                        showFloatingWidget()
-                    }
+                    if (enableFloating) showFloatingWidget()
                 }
             }
+            ACTION_TOGGLE_PAUSE -> toggleStreamPause()
             ACTION_TOGGLE_MUTE -> toggleAudioMute()
             ACTION_SWITCH_CAMERA -> switchCamera()
             ACTION_TOGGLE_TORCH -> toggleTorch()
             ACTION_SET_ZOOM -> {
                 val zoom = intent.getFloatExtra(EXTRA_ZOOM_LEVEL, 1.0f)
                 applyCameraZoom(zoom)
+            }
+            ACTION_UPDATE_VIEWERS -> {
+                currentViewers = intent.getLongExtra(EXTRA_VIEWERS, 0L)
+                updateFloatingStats()
             }
             ACTION_STOP -> {
                 isStreamingActive = false
@@ -152,23 +162,28 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         } catch (_: Exception) {}
     }
 
-    private fun acquireWakeLock() {
-        try {
-            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
-            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ONTIKLiveStudio::StreamWakeLock").apply {
-                setReferenceCounted(false)
-                acquire(12 * 60 * 60 * 1000L)
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "WakeLock error: ${e.message}")
-        }
-    }
+    private fun toggleStreamPause() {
+        val streamer: Any? = rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile
+        if (streamer == null || !isStreamingActive) return
 
-    private fun releaseWakeLock() {
+        isStreamPaused = !isStreamPaused
         try {
-            wakeLock?.let { if (it.isHeld) it.release() }
-        } catch (_: Exception) {}
-        wakeLock = null
+            val gl = streamer.javaClass.getMethod("getGlInterface").invoke(streamer)
+            if (isStreamPaused) {
+                gl?.javaClass?.getMethod("muteVideo")?.invoke(gl)
+                streamer.javaClass.getMethod("muteAudio").invoke(streamer)
+                broadcastStatus("Stream Paused (Connection Active)", isLive = true)
+            } else {
+                gl?.javaClass?.getMethod("unMuteVideo")?.invoke(gl)
+                if (!isAudioMuted) {
+                    streamer.javaClass.getMethod("unMuteAudio").invoke(streamer)
+                }
+                broadcastStatus("Stream Resumed", isLive = true)
+            }
+            updateFloatingStats()
+        } catch (e: Exception) {
+            Log.e(TAG, "Pause error: ${e.message}")
+        }
     }
 
     @SuppressLint("ClickableViewAccessibility")
@@ -201,6 +216,11 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             val bubbleSize = (48 * density).toInt()
 
             val rootLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
+                gravity = Gravity.START
+            }
+
+            val topRow = LinearLayout(this).apply {
                 orientation = LinearLayout.HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
             }
@@ -212,69 +232,129 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 textSize = 18f
                 background = GradientDrawable().apply {
                     shape = GradientDrawable.OVAL
-                    setColor(Color.parseColor("#E612141D"))
+                    setColor(Color.parseColor("#EE12141D"))
                     setStroke((1.5f * density).toInt(), Color.parseColor("#FF1744"))
                 }
             }
 
-            val menuPill = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding((10 * density).toInt(), (4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt())
+            topRow.addView(bubbleIcon)
+
+            // Expanded Floating Glass Dashboard
+            val detailsCard = LinearLayout(this).apply {
+                orientation = LinearLayout.VERTICAL
                 visibility = View.GONE
+                setPadding((12 * density).toInt(), (10 * density).toInt(), (12 * density).toInt(), (10 * density).toInt())
                 background = GradientDrawable().apply {
-                    cornerRadius = 24 * density
-                    setColor(Color.parseColor("#F0181A26"))
-                    setStroke((1 * density).toInt(), Color.parseColor("#3B4259"))
+                    cornerRadius = 14 * density
+                    setColor(Color.parseColor("#F2161925"))
+                    setStroke((1 * density).toInt(), Color.parseColor("#2E354B"))
                 }
                 val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (210 * density).toInt(),
                     LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { leftMargin = (8 * density).toInt() }
+                ).apply { topMargin = (6 * density).toInt() }
                 layoutParams = lp
             }
-            floatingMenuLayout = menuPill
+            floatingDetailsCard = detailsCard
 
-            val muteBtn = Button(this).apply {
-                text = "Mic On"
+            val statsRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+
+            val viewersTxt = TextView(this).apply {
+                text = "👥 Viewers: --"
+                setTextColor(Color.parseColor("#00E676"))
+                textSize = 11f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f)
+            }
+            floatViewersText = viewersTxt
+
+            val bitrateTxt = TextView(this).apply {
+                text = "0 kbps"
+                setTextColor(Color.parseColor("#8E95AA"))
+                textSize = 11f
+            }
+            floatBitrateText = bitrateTxt
+
+            statsRow.addView(viewersTxt)
+            statsRow.addView(bitrateTxt)
+
+            val actionRow = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.MATCH_PARENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { topMargin = (8 * density).toInt() }
+                layoutParams = lp
+            }
+
+            val pauseBtn = Button(this).apply {
+                text = "Pause"
                 textSize = 10f
                 setTextColor(Color.WHITE)
                 background = GradientDrawable().apply {
-                    cornerRadius = 14 * density
+                    cornerRadius = 10 * density
+                    setColor(Color.parseColor("#F57C00"))
+                }
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f)
+                setOnClickListener {
+                    resetAutoFadeTimer()
+                    toggleStreamPause()
+                }
+            }
+            floatPauseBtn = pauseBtn
+
+            val muteBtn = Button(this).apply {
+                text = "Mute"
+                textSize = 10f
+                setTextColor(Color.WHITE)
+                background = GradientDrawable().apply {
+                    cornerRadius = 10 * density
                     setColor(Color.parseColor("#2A3147"))
                 }
-                setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                val lp = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply {
+                    leftMargin = (6 * density).toInt()
+                }
+                layoutParams = lp
                 setOnClickListener {
                     resetAutoFadeTimer()
                     toggleAudioMute()
                 }
             }
-            floatingMuteBtn = muteBtn
+            floatMuteBtn = muteBtn
 
             val stopBtn = Button(this).apply {
                 text = "Stop"
                 textSize = 10f
                 setTextColor(Color.WHITE)
                 background = GradientDrawable().apply {
-                    cornerRadius = 14 * density
+                    cornerRadius = 10 * density
                     setColor(Color.parseColor("#D50000"))
                 }
-                setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    (34 * density).toInt()
-                ).apply { leftMargin = (6 * density).toInt() }
+                setPadding((8 * density).toInt(), 0, (8 * density).toInt(), 0)
+                val lp = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply {
+                    leftMargin = (6 * density).toInt()
+                }
                 layoutParams = lp
                 setOnClickListener {
                     stopStreaming(keepPreview = false)
                 }
             }
 
-            menuPill.addView(muteBtn)
-            menuPill.addView(stopBtn)
+            actionRow.addView(pauseBtn)
+            actionRow.addView(muteBtn)
+            actionRow.addView(stopBtn)
 
-            rootLayout.addView(bubbleIcon)
-            rootLayout.addView(menuPill)
+            detailsCard.addView(statsRow)
+            detailsCard.addView(actionRow)
+
+            rootLayout.addView(topRow)
+            rootLayout.addView(detailsCard)
 
             bubbleIcon.setOnTouchListener(object : View.OnTouchListener {
                 private var initialX = 0
@@ -300,8 +380,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                         }
                         MotionEvent.ACTION_UP -> {
                             if (abs(event.rawX - touchX) < 15 && abs(event.rawY - touchY) < 15) {
-                                isMenuExpanded = !isMenuExpanded
-                                menuPill.visibility = if (isMenuExpanded) View.VISIBLE else View.GONE
+                                isDetailsOpen = !isDetailsOpen
+                                detailsCard.visibility = if (isDetailsOpen) View.VISIBLE else View.GONE
                             }
                             return true
                         }
@@ -314,70 +394,59 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             floatingWidgetView = rootLayout
             resetAutoFadeTimer()
         } catch (e: Exception) {
-            Log.e(TAG, "Floating bubble error: ${e.message}", e)
+            Log.e(TAG, "Floating error: ${e.message}", e)
         }
+    }
+
+    private fun updateFloatingStats() {
+        floatPauseBtn?.text = if (isStreamPaused) "Resume" else "Pause"
+        floatMuteBtn?.text = if (isAudioMuted) "Unmute" else "Mute"
+        floatViewersText?.text = if (currentViewers > 0) "👥 $currentViewers watching" else "👥 Viewers: --"
+        floatBitrateText?.text = if (currentBitrateKbps > 1000) String.format("%.1f Mbps", currentBitrateKbps / 1000f) else "$currentBitrateKbps kbps"
     }
 
     private fun removeFloatingWidget() {
         uiHandler.removeCallbacks(autoFadeRunnable)
-        try {
-            floatingWidgetView?.let { windowManager?.removeView(it) }
-        } catch (_: Exception) {}
+        try { floatingWidgetView?.let { windowManager?.removeView(it) } } catch (_: Exception) {}
         floatingWidgetView = null
-        floatingMenuLayout = null
-        floatingMuteBtn = null
+        floatingDetailsCard = null
+    }
+
+    private fun acquireWakeLock() {
+        try {
+            val pm = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = pm.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "ONTIKLiveStudio::StreamWakeLock").apply {
+                setReferenceCounted(false)
+                acquire(12 * 60 * 60 * 1000L)
+            }
+        } catch (_: Exception) {}
+    }
+
+    private fun releaseWakeLock() {
+        try { wakeLock?.let { if (it.isHeld) it.release() } } catch (_: Exception) {}
+        wakeLock = null
     }
 
     private fun switchCamera() {
-        try {
-            rtmpCamera2?.let {
-                it.switchCamera()
-                broadcastStatus("Camera switched")
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "Switch camera failed: ${e.message}")
-        }
+        try { rtmpCamera2?.switchCamera(); broadcastStatus("Camera switched") } catch (_: Exception) {}
     }
 
     private fun toggleTorch() {
         try {
             rtmpCamera2?.let {
-                if (it.isLanternEnabled) {
-                    it.disableLantern()
-                    broadcastStatus("Torch OFF")
-                } else {
-                    it.enableLantern()
-                    broadcastStatus("Torch ON")
-                }
+                if (it.isLanternEnabled) { it.disableLantern(); broadcastStatus("Torch OFF") }
+                else { it.enableLantern(); broadcastStatus("Torch ON") }
             }
-        } catch (e: Exception) {
-            Log.e(TAG, "Torch toggle failed: ${e.message}")
-        }
+        } catch (_: Exception) {}
     }
 
     private fun toggleAudioMute() {
-        val streamer: Any? = rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile
-        if (streamer == null || !isStreamingActive) {
-            broadcastStatus("Stream is not active to toggle mic")
-            return
-        }
-
+        val streamer: Any? = rtmpCamera2 ?: rtmpDisplay ?: rtmpFromFile ?: return
         try {
-            val targetMute = !isAudioMuted
-            val methodName = if (targetMute) "muteAudio" else "unMuteAudio"
-            val fallbackMethodName = if (targetMute) "disableAudio" else "enableAudio"
-
-            val method = try {
-                streamer.javaClass.getMethod(methodName)
-            } catch (_: NoSuchMethodException) {
-                streamer.javaClass.getMethod(fallbackMethodName)
-            }
-
-            method.invoke(streamer)
-            isAudioMuted = targetMute
-
-            floatingMuteBtn?.text = if (isAudioMuted) "Mic Off" else "Mic On"
-
+            isAudioMuted = !isAudioMuted
+            val method = if (isAudioMuted) "muteAudio" else "unMuteAudio"
+            streamer.javaClass.getMethod(method).invoke(streamer)
+            updateFloatingStats()
             val intent = Intent(ACTION_STATUS).apply {
                 putExtra(EXTRA_IS_MUTED, isAudioMuted)
                 putExtra(EXTRA_STATUS_MSG, if (isAudioMuted) "Microphone Muted" else "Microphone Live")
@@ -386,7 +455,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             }
             sendBroadcast(intent)
         } catch (e: Exception) {
-            Log.e(TAG, "Audio mute toggle error: ${e.message}", e)
+            Log.e(TAG, "Mute error: ${e.message}")
         }
     }
 
@@ -395,16 +464,18 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             putExtra(EXTRA_STATUS_MSG, msg)
             putExtra(EXTRA_IS_LIVE, isLive)
             putExtra(EXTRA_IS_MUTED, isAudioMuted)
+            putExtra(EXTRA_IS_PAUSED, isStreamPaused)
             setPackage(packageName)
         }
         sendBroadcast(intent)
     }
 
     private fun broadcastBitrate(kbps: Long) {
+        currentBitrateKbps = kbps
+        updateFloatingStats()
         val intent = Intent(ACTION_STATUS).apply {
             putExtra(EXTRA_BITRATE, kbps)
             putExtra(EXTRA_IS_LIVE, true)
-            putExtra(EXTRA_IS_MUTED, isAudioMuted)
             setPackage(packageName)
         }
         sendBroadcast(intent)
@@ -416,30 +487,21 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
         val fgsType = if (Build.VERSION.SDK_INT >= 34) {
             when (config.mode) {
-                StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
                 StreamMode.FILE -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             }
         } else if (Build.VERSION.SDK_INT >= 29) {
             when (config.mode) {
-                StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
-                StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or
-                        ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.CAMERA -> ServiceInfo.FOREGROUND_SERVICE_TYPE_CAMERA or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
+                StreamMode.SCREEN -> ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PROJECTION or ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE
                 StreamMode.FILE -> 0
             }
         } else {
             0
         }
 
-        ServiceCompat.startForeground(
-            this, NotificationHelper.id(),
-            NotificationHelper.build(this, "Streaming ${config.mode.name.lowercase()}..."),
-            fgsType
-        )
-
+        ServiceCompat.startForeground(this, NotificationHelper.id(), NotificationHelper.build(this, "Streaming Live..."), fgsType)
         broadcastStatus("Initializing stream...")
 
         when (config.mode) {
@@ -451,15 +513,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
     private fun startCamera(config: StreamConfig) {
         val view = openGlView
-        rtmpCamera2 = if (view != null) {
-            RtmpCamera2(view, this)
-        } else {
-            RtmpCamera2(this, this)
-        }
-
-        // PERFECT ASPECT RATIO FIX:
-        // Always pass Landscape dimensions (e.g. 1920x1080) to prepareVideo,
-        // and enforce 90 degree rotation if Portrait (9:16) is requested.
+        rtmpCamera2 = if (view != null) RtmpCamera2(view, this) else RtmpCamera2(this, this)
         val isPortrait = config.width < config.height
         val camW = if (isPortrait) config.height else config.width
         val camH = if (isPortrait) config.width else config.height
@@ -476,17 +530,10 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun startScreen(config: StreamConfig, intent: Intent) {
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
         @Suppress("DEPRECATION")
-        val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA)
-        if (resultData == null) {
-            broadcastStatus("Screen capture data missing")
-            stopStreaming(keepPreview = false)
-            return
-        }
+        val resultData = intent.getParcelableExtra<Intent>(EXTRA_RESULT_DATA) ?: return
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             getStreamClient().setReTries(0)
             setIntentResult(resultCode, resultData)
-            
-            // Screen capture accepts exact dimensions, no hardware rotation swap needed
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             startStream(config.fullRtmpUrl)
@@ -494,35 +541,19 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     }
 
     private fun startFile(config: StreamConfig) {
-        val path = config.fileUri
-        if (path.isNullOrBlank()) {
-            broadcastStatus("No video file selected")
-            stopStreaming(keepPreview = false)
-            return
-        }
-
+        val path = config.fileUri ?: return
         val uri = android.net.Uri.parse(path)
-        rtmpFromFile = RtmpFromFile(
-            this, this, this, this
-        ).apply {
+        rtmpFromFile = RtmpFromFile(this, this, this, this).apply {
             getStreamClient().setReTries(0)
             setLoopMode(config.loopFile)
-
-            val videoPrepared = prepareVideo(this@StreamingService, uri)
-            val audioPrepared = prepareAudio(this@StreamingService, uri)
-            if (!videoPrepared && !audioPrepared) {
-                broadcastStatus("Unable to prepare video file")
-                stopStreaming(keepPreview = false)
-                return
+            if (prepareVideo(this@StreamingService, uri) || prepareAudio(this@StreamingService, uri)) {
+                startStream(config.fullRtmpUrl)
             }
-
-            startStream(config.fullRtmpUrl)
         }
     }
 
     private fun handleAutoReconnect(reason: String) {
         if (!isStreamingActive || activeConfig == null) return
-
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++
             broadcastStatus("Dropped ($reason). Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
@@ -547,6 +578,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun stopStreaming(keepPreview: Boolean = false) {
         isStreamingActive = false
         isAudioMuted = false
+        isStreamPaused = false
         reconnectJob?.cancel()
         releaseWakeLock()
         removeFloatingWidget()
@@ -557,7 +589,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 if (!keepPreview) it.stopPreview()
             }
         } catch (_: Exception) {}
-
         try { rtmpDisplay?.let { if (it.isStreaming) it.stopStream() } } catch (_: Exception) {}
         try { rtmpFromFile?.let { if (it.isStreaming) it.stopStream() } } catch (_: Exception) {}
 
@@ -568,7 +599,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             ServiceCompat.stopForeground(this, ServiceCompat.STOP_FOREGROUND_REMOVE)
             stopSelf()
         }
-
         broadcastStatus("Stream stopped", isLive = false)
     }
 

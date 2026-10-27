@@ -13,7 +13,7 @@
         android:orientation="vertical"
         android:padding="14dp">
 
-        <!-- Top Live HUD Glass Card -->
+        <!-- Top Live HUD Card -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -42,28 +42,45 @@
                     android:layout_height="wrap_content"
                     android:text="00:00:00"
                     android:textColor="#E0E0E0"
-                    android:textSize="15sp"
+                    android:textSize="14sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/bitrateText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginStart="12dp"
+                    android:layout_marginStart="10dp"
                     android:text="0 kbps"
                     android:textColor="#00E676"
-                    android:textSize="14sp"
+                    android:textSize="13sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
-            <TextView
-                android:id="@+id/statusText"
+            <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Status: Ready"
-                android:textColor="#8E95AA"
-                android:textSize="12sp" />
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/statusText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Status: Ready"
+                    android:textColor="#8E95AA"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/viewersCountText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="👥 Viewers: --"
+                    android:textColor="#FFCA28"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Camera Preview Surface -->
@@ -304,7 +321,7 @@
                 android:text="Sign In With YouTube" />
         </LinearLayout>
 
-        <!-- Bottom Action Buttons -->
+        <!-- Bottom 4 Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
@@ -314,34 +331,49 @@
             <Button
                 android:id="@+id/startBtn"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
-                android:layout_weight="1"
+                android:layout_height="44dp"
+                android:layout_weight="1.2"
                 android:background="@drawable/bg_btn_start"
                 android:textColor="#FFFFFF"
                 android:textStyle="bold"
-                android:text="Start Stream" />
+                android:textSize="12sp"
+                android:text="Start" />
+
+            <Button
+                android:id="@+id/pauseBtn"
+                android:layout_width="0dp"
+                android:layout_height="44dp"
+                android:layout_weight="1"
+                android:layout_marginStart="6dp"
+                android:background="@drawable/bg_btn_disabled"
+                android:textColor="#6C7594"
+                android:enabled="false"
+                android:textSize="12sp"
+                android:text="Pause" />
 
             <Button
                 android:id="@+id/muteBtn"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:background="@drawable/bg_btn_disabled"
                 android:textColor="#6C7594"
                 android:enabled="false"
-                android:text="Mute Mic" />
+                android:textSize="12sp"
+                android:text="Mute" />
 
             <Button
                 android:id="@+id/stopBtn"
                 android:layout_width="0dp"
-                android:layout_height="46dp"
+                android:layout_height="44dp"
                 android:layout_weight="1"
-                android:layout_marginStart="8dp"
+                android:layout_marginStart="6dp"
                 android:background="@drawable/bg_btn_disabled"
                 android:textColor="#6C7594"
                 android:enabled="false"
                 android:textStyle="bold"
+                android:textSize="12sp"
                 android:text="Stop" />
         </LinearLayout>
 

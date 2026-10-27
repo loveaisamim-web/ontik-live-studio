@@ -1,114 +1,100 @@
 package com.ontik.livestudio
 
 import android.content.Context
-import android.util.Log
+import android.content.Intent
 import com.google.android.gms.auth.api.signin.GoogleSignIn
+import com.google.android.gms.auth.api.signin.GoogleSignInClient
 import com.google.android.gms.auth.api.signin.GoogleSignInOptions
 import com.google.android.gms.common.api.Scope
-import com.google.api.client.extensions.android.http.AndroidHttp
 import com.google.api.client.googleapis.extensions.android.gms.auth.GoogleAccountCredential
+import com.google.api.client.http.javanet.NetHttpTransport
 import com.google.api.client.json.gson.GsonFactory
-import com.google.api.client.util.DateTime
 import com.google.api.services.youtube.YouTube
+import com.google.api.services.youtube.YouTubeScopes
 import com.google.api.services.youtube.model.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import java.text.SimpleDateFormat
+import java.util.*
 
 class YouTubeAuthManager(private val context: Context) {
 
-    companion object {
-        private const val TAG = "YouTubeAuthManager"
+    private val gso = GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
+        .requestEmail()
+        .requestScopes(Scope(YouTubeScopes.YOUTUBE))
+        .build()
+
+    private val signInClient: GoogleSignInClient = GoogleSignIn.getClient(context, gso)
+    private var lastBroadcastId: String? = null
+
+    fun signInIntent(): Intent = signInClient.signInIntent
+
+    private fun getYouTubeService(): YouTube? {
+        val account = GoogleSignIn.getLastSignedInAccount(context) ?: return null
+        val credential = GoogleAccountCredential.usingOAuth2(
+            context, listOf(YouTubeScopes.YOUTUBE)
+        ).apply {
+            selectedAccount = account.account
+        }
+        return YouTube.Builder(NetHttpTransport(), GsonFactory.getDefaultInstance(), credential)
+            .setApplicationName("ONTIK Live Studio")
+            .build()
     }
 
-    private val scope = Scope("https://www.googleapis.com/auth/youtube")
+    suspend fun createLiveStream(): Pair<String, String>? = withContext(Dispatchers.IO) {
+        try {
+            val yt = getYouTubeService() ?: return@withContext null
+            val time = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.US).format(Date())
 
-    fun signInIntent() = GoogleSignIn.getClient(
-        context,
-        GoogleSignInOptions.Builder(GoogleSignInOptions.DEFAULT_SIGN_IN)
-            .requestEmail()
-            .requestScopes(scope)
-            .build()
-    ).signInIntent
-
-    suspend fun createLiveStream(): Pair<String, String>? =
-        withContext(Dispatchers.IO) {
-            try {
-                val account = GoogleSignIn.getLastSignedInAccount(context)
-                    ?: return@withContext null
-
-                val credential = GoogleAccountCredential.usingOAuth2(
-                    context,
-                    listOf(scope.toString())
-                ).apply {
-                    selectedAccount = account.account
-                }
-
-                val youtube = YouTube.Builder(
-                    AndroidHttp.newCompatibleTransport(),
-                    GsonFactory.getDefaultInstance(),
-                    credential
-                ).setApplicationName("ONTIK Live Studio").build()
-
-                val timeStamp = System.currentTimeMillis()
-                val title = "ONTIK Live Stream $timeStamp"
-
-                // 1. Create the Live Broadcast
-                val broadcastSnippet = LiveBroadcastSnippet().apply {
-                    this.title = title
-                    this.scheduledStartTime = DateTime(timeStamp)
-                }
-                val broadcastStatus = LiveBroadcastStatus().apply {
-                    this.privacyStatus = "unlisted"
-                }
-                val broadcastContentDetails = LiveBroadcastContentDetails().apply {
-                    this.enableAutoStart = true
-                    this.enableAutoStop = true
-                }
-                val broadcast = LiveBroadcast().apply {
-                    this.snippet = broadcastSnippet
-                    this.status = broadcastStatus
-                    this.contentDetails = broadcastContentDetails
-                }
-                val createdBroadcast = youtube.liveBroadcasts()
-                    .insert(listOf("snippet", "status", "contentDetails"), broadcast)
-                    .execute()
-
-                // 2. Create the Live Stream ingestion
-                val streamSnippet = LiveStreamSnippet().apply {
-                    this.title = title
-                }
-                val cdn = CdnSettings().apply {
-                    this.frameRate = "30fps"
-                    this.resolution = "1080p"
-                    this.ingestionType = "rtmp"
-                }
-                val stream = LiveStream().apply {
-                    this.snippet = streamSnippet
-                    this.cdn = cdn
-                }
-                val createdStream = youtube.liveStreams()
-                    .insert(listOf("snippet", "cdn"), stream)
-                    .execute()
-
-                // 3. Bind the broadcast to the stream
-                youtube.liveBroadcasts()
-                    .bind(createdBroadcast.id, listOf("id", "contentDetails"))
-                    .setStreamId(createdStream.id)
-                    .execute()
-
-                val info = createdStream.cdn?.ingestionInfo
-                    ?: return@withContext null
-
-                val address = info.ingestionAddress
-                    ?: return@withContext null
-
-                val key = info.streamName
-                    ?: return@withContext null
-
-                Pair(address, key)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error creating YouTube live broadcast: ${e.message}", e)
-                null
+            val broadcastSnippet = LiveBroadcastSnippet().apply {
+                title = "ONTIK Live - $time"
+                scheduledStartTime = com.google.api.client.util.DateTime(System.currentTimeMillis())
             }
+            val status = LiveBroadcastStatus().apply { privacyStatus = "public" }
+            val broadcast = LiveBroadcast().apply {
+                snippet = broadcastSnippet
+                this.status = status
+                kind = "youtube#liveBroadcast"
+            }
+
+            val insertedBroadcast = yt.liveBroadcasts().insert(listOf("snippet", "status"), broadcast).execute()
+            lastBroadcastId = insertedBroadcast.id
+
+            val streamSnippet = LiveStreamSnippet().apply { title = "ONTIK Stream - $time" }
+            val cdn = CdnSettings().apply {
+                format = "1080p"
+                ingestionType = "rtmp"
+                resolution = "variable"
+                frameRate = "variable"
+            }
+            val stream = LiveStream().apply {
+                snippet = streamSnippet
+                cdn = cdn
+                kind = "youtube#liveStream"
+            }
+
+            val insertedStream = yt.liveStreams().insert(listOf("snippet", "cdn"), stream).execute()
+            yt.liveBroadcasts().bind(insertedBroadcast.id, listOf("id", "contentDetails"))
+                .setStreamId(insertedStream.id).execute()
+
+            val ing = insertedStream.cdn.ingestionInfo
+            Pair(ing.ingestionAddress, ing.streamName)
+        } catch (_: Exception) {
+            null
         }
+    }
+
+    suspend fun getLiveViewerCount(): Long? = withContext(Dispatchers.IO) {
+        val bId = lastBroadcastId ?: return@withContext null
+        try {
+            val yt = getYouTubeService() ?: return@withContext null
+            val resp = yt.videos().list(listOf("liveStreamingDetails"))
+                .setId(listOf(bId))
+                .execute()
+            val video = resp.items.firstOrNull() ?: return@withContext null
+            video.liveStreamingDetails?.concurrentViewers?.toLong()
+        } catch (_: Exception) {
+            null
+        }
+    }
 }

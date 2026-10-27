@@ -39,6 +39,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var keyInput: EditText
     private lateinit var toggleKeyVisibilityBtn: TextView
     private lateinit var startBtn: Button
+    private lateinit var pauseBtn: Button
     private lateinit var muteBtn: Button
     private lateinit var stopBtn: Button
     private lateinit var switchCameraBtn: Button
@@ -48,6 +49,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var youtubeBtn: Button
     private lateinit var pickFileBtn: Button
     private lateinit var statusText: TextView
+    private lateinit var viewersCountText: TextView
     private lateinit var liveTimerText: TextView
     private lateinit var bitrateText: TextView
     private lateinit var cameraPreview: OpenGlView
@@ -59,6 +61,7 @@ class MainActivity : AppCompatActivity() {
     private var selectedFileUri: String? = null
 
     private var timerJob: Job? = null
+    private var viewersJob: Job? = null
     private var streamStartTime: Long = 0L
     private var isPasswordVisible = false
 
@@ -67,33 +70,51 @@ class MainActivity : AppCompatActivity() {
             val msg = intent?.getStringExtra(StreamingService.EXTRA_STATUS_MSG)
             val isLive = intent?.getBooleanExtra(StreamingService.EXTRA_IS_LIVE, false) ?: false
             val bitrate = intent?.getLongExtra(StreamingService.EXTRA_BITRATE, -1L) ?: -1L
-            val isMuted = intent?.hasExtra(StreamingService.EXTRA_IS_MUTED) == true &&
-                    intent.getBooleanExtra(StreamingService.EXTRA_IS_MUTED, false)
+            val isMuted = intent?.getBooleanExtra(StreamingService.EXTRA_IS_MUTED, false) ?: false
+            val isPaused = intent?.getBooleanExtra(StreamingService.EXTRA_IS_PAUSED, false) ?: false
 
-            if (!msg.isNullOrEmpty()) {
-                statusText.text = "Status: $msg"
-            }
-
-            if (intent?.hasExtra(StreamingService.EXTRA_IS_MUTED) == true) {
-                muteBtn.text = if (isMuted) "Unmute Mic" else "Mute Mic"
-            }
+            if (!msg.isNullOrEmpty()) statusText.text = "Status: $msg"
+            muteBtn.text = if (isMuted) "Unmute" else "Mute"
+            pauseBtn.text = if (isPaused) "Resume" else "Pause"
 
             if (bitrate >= 0) {
-                bitrateText.text = if (bitrate > 1000) {
-                    String.format(Locale.US, "%.1f Mbps", bitrate / 1000.0)
-                } else {
-                    "$bitrate kbps"
-                }
+                bitrateText.text = if (bitrate > 1000) String.format(Locale.US, "%.1f Mbps", bitrate / 1000.0) else "$bitrate kbps"
             }
 
             if (isLive) {
                 updateUiForStreamingState(true)
                 if (timerJob == null) startTimer()
+                if (viewersJob == null) startViewersPolling()
             } else if (msg?.contains("stopped", ignoreCase = true) == true || msg?.contains("failed", ignoreCase = true) == true) {
                 updateUiForStreamingState(false)
                 stopTimer()
+                stopViewersPolling()
             }
         }
+    }
+
+    private fun startViewersPolling() {
+        viewersJob?.cancel()
+        viewersJob = scope.launch {
+            while (isActive) {
+                val v = ytManager.getLiveViewerCount()
+                if (v != null) {
+                    viewersCountText.text = "👥 Viewers: $v"
+                    val i = Intent(this@MainActivity, StreamingService::class.java).apply {
+                        action = StreamingService.ACTION_UPDATE_VIEWERS
+                        putExtra(StreamingService.EXTRA_VIEWERS, v)
+                    }
+                    startService(i)
+                }
+                delay(20000)
+            }
+        }
+    }
+
+    private fun stopViewersPolling() {
+        viewersJob?.cancel()
+        viewersJob = null
+        viewersCountText.text = "👥 Viewers: --"
     }
 
     private fun updateUiForStreamingState(isStreaming: Boolean) {
@@ -101,6 +122,10 @@ class MainActivity : AppCompatActivity() {
             startBtn.isEnabled = false
             startBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
             startBtn.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+
+            pauseBtn.isEnabled = true
+            pauseBtn.setBackgroundResource(R.drawable.bg_btn_mute)
+            pauseBtn.setTextColor(ContextCompat.getColor(this, android.R.color.white))
 
             muteBtn.isEnabled = true
             muteBtn.setBackgroundResource(R.drawable.bg_btn_mute)
@@ -114,10 +139,15 @@ class MainActivity : AppCompatActivity() {
             startBtn.setBackgroundResource(R.drawable.bg_btn_start)
             startBtn.setTextColor(ContextCompat.getColor(this, android.R.color.white))
 
+            pauseBtn.isEnabled = false
+            pauseBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
+            pauseBtn.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
+            pauseBtn.text = "Pause"
+
             muteBtn.isEnabled = false
             muteBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
             muteBtn.setTextColor(ContextCompat.getColor(this, android.R.color.darker_gray))
-            muteBtn.text = "Mute Mic"
+            muteBtn.text = "Mute"
 
             stopBtn.isEnabled = false
             stopBtn.setBackgroundResource(R.drawable.bg_btn_disabled)
@@ -150,12 +180,8 @@ class MainActivity : AppCompatActivity() {
     private val permissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
     ) { permissions ->
-        val allGranted = permissions.values.all { it }
-        if (allGranted) {
-            proceedWithCurrentMode()
-        } else {
-            statusText.text = "Status: Required permissions denied"
-        }
+        if (permissions.values.all { it }) proceedWithCurrentMode()
+        else statusText.text = "Status: Required permissions denied"
     }
 
     private val projectionLauncher = registerForActivityResult(
@@ -182,10 +208,7 @@ class MainActivity : AppCompatActivity() {
             val uri: Uri? = result.data?.data
             if (uri != null) {
                 try {
-                    contentResolver.takePersistableUriPermission(
-                        uri,
-                        Intent.FLAG_GRANT_READ_URI_PERMISSION
-                    )
+                    contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
                 } catch (_: Exception) {}
                 selectedFileUri = uri.toString()
                 statusText.text = "Status: Video file selected"
@@ -208,7 +231,7 @@ class MainActivity : AppCompatActivity() {
                     prefs.streamKey = r.second
                     statusText.text = "Status: YouTube stream ready"
                 } else {
-                    statusText.text = "Status: YouTube setup failed (check channel eligibility)"
+                    statusText.text = "Status: YouTube setup failed"
                 }
             }
         }
@@ -231,6 +254,7 @@ class MainActivity : AppCompatActivity() {
         keyInput                = findViewById(R.id.keyInput)
         toggleKeyVisibilityBtn  = findViewById(R.id.toggleKeyVisibilityBtn)
         startBtn                = findViewById(R.id.startBtn)
+        pauseBtn                = findViewById(R.id.pauseBtn)
         muteBtn                 = findViewById(R.id.muteBtn)
         stopBtn                 = findViewById(R.id.stopBtn)
         switchCameraBtn         = findViewById(R.id.switchCameraBtn)
@@ -240,6 +264,7 @@ class MainActivity : AppCompatActivity() {
         youtubeBtn              = findViewById(R.id.youtubeBtn)
         pickFileBtn             = findViewById(R.id.pickFileBtn)
         statusText              = findViewById(R.id.statusText)
+        viewersCountText        = findViewById(R.id.viewersCountText)
         liveTimerText           = findViewById(R.id.liveTimerText)
         bitrateText             = findViewById(R.id.bitrateText)
         cameraPreview           = findViewById(R.id.cameraPreview)
@@ -247,16 +272,10 @@ class MainActivity : AppCompatActivity() {
 
         StreamingService.openGlView = cameraPreview
 
-        // Show/Hide Stream Key
         toggleKeyVisibilityBtn.setOnClickListener {
             isPasswordVisible = !isPasswordVisible
-            if (isPasswordVisible) {
-                keyInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
-                toggleKeyVisibilityBtn.text = "HIDE"
-            } else {
-                keyInput.inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
-                toggleKeyVisibilityBtn.text = "SHOW"
-            }
+            keyInput.inputType = if (isPasswordVisible) InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD else InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_PASSWORD
+            toggleKeyVisibilityBtn.text = if (isPasswordVisible) "HIDE" else "SHOW"
             keyInput.setSelection(keyInput.text.length)
         }
 
@@ -281,57 +300,18 @@ class MainActivity : AppCompatActivity() {
             }
         }
 
-        platformSpinner.adapter = createSpinnerAdapter(
-            listOf("YouTube Live", "Facebook Live", "Twitch", "Custom RTMP")
-        )
-
-        platformSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
-            override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                when (pos) {
-                    0 -> urlInput.setText("rtmp://a.rtmp.youtube.com/live2")
-                    1 -> urlInput.setText("rtmps://live-api-s.facebook.com:443/rtmp/")
-                    2 -> urlInput.setText("rtmp://live.twitch.tv/app/")
-                    3 -> if (urlInput.text.toString().contains("youtube") || 
-                            urlInput.text.toString().contains("facebook") || 
-                            urlInput.text.toString().contains("twitch")) {
-                        urlInput.setText("")
-                    }
-                }
-            }
-            override fun onNothingSelected(parent: AdapterView<*>?) {}
-        }
-
-        modeSpinner.adapter = createSpinnerAdapter(
-            listOf("Camera Live", "Screen Live", "Video File Live")
-        )
-
-        ratioSpinner.adapter = createSpinnerAdapter(
-            listOf(
-                "16:9 Landscape (YouTube Standard)",
-                "9:16 Portrait (YouTube Shorts / Vertical)"
-            )
-        )
-
-        qualitySpinner.adapter = createSpinnerAdapter(
-            listOf(
-                "1080p Full HD (4.5 Mbps)",
-                "720p HD (2.5 Mbps - Recommended)",
-                "480p SD (1.2 Mbps - Data Saver)"
-            )
-        )
+        platformSpinner.adapter = createSpinnerAdapter(listOf("YouTube Live", "Facebook Live", "Twitch", "Custom RTMP"))
+        modeSpinner.adapter = createSpinnerAdapter(listOf("Camera Live", "Screen Live", "Video File Live"))
+        ratioSpinner.adapter = createSpinnerAdapter(listOf("16:9 Landscape (YouTube Standard)", "9:16 Portrait (YouTube Shorts / Vertical)"))
+        qualitySpinner.adapter = createSpinnerAdapter(listOf("1080p Full HD (4.5 Mbps)", "720p HD (2.5 Mbps - Recommended)", "480p SD (1.2 Mbps - Data Saver)"))
 
         modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                val isCamera = (pos == 0)
-                val isScreen = (pos == 1)
-                val isFile = (pos == 2)
-
-                cameraPreview.visibility = if (isCamera) View.VISIBLE else View.GONE
-                cameraControlsLayout.visibility = if (isCamera) View.VISIBLE else View.GONE
-                floatingWidgetCheckbox.visibility = if (isScreen) View.VISIBLE else View.GONE
-                pickFileBtn.visibility = if (isFile) View.VISIBLE else View.GONE
-                loopCheckbox.visibility = if (isFile) View.VISIBLE else View.GONE
-                noiseCancelCheckbox.visibility = if (isFile) View.GONE else View.VISIBLE
+                cameraPreview.visibility = if (pos == 0) View.VISIBLE else View.GONE
+                cameraControlsLayout.visibility = if (pos == 0) View.VISIBLE else View.GONE
+                floatingWidgetCheckbox.visibility = if (pos == 1) View.VISIBLE else View.GONE
+                pickFileBtn.visibility = if (pos == 2) View.VISIBLE else View.GONE
+                loopCheckbox.visibility = if (pos == 2) View.VISIBLE else View.GONE
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -342,53 +322,39 @@ class MainActivity : AppCompatActivity() {
         startBtn.setOnClickListener {
             val url = urlInput.text.toString().trim()
             val key = keyInput.text.toString().trim()
-
-            if (url.isEmpty()) {
-                statusText.text = "Status: Please enter an RTMP URL"
-                return@setOnClickListener
-            }
-
-            if (keepScreenOnCheckbox.isChecked) {
-                window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-            }
-
+            if (url.isEmpty()) { statusText.text = "Status: Enter RTMP URL"; return@setOnClickListener }
+            if (keepScreenOnCheckbox.isChecked) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             prefs.rtmpUrl = url
             prefs.streamKey = key
             checkPermissionsAndProceed()
         }
 
+        pauseBtn.setOnClickListener {
+            startService(Intent(this, StreamingService::class.java).apply { action = StreamingService.ACTION_TOGGLE_PAUSE })
+        }
+
         muteBtn.setOnClickListener {
-            startService(Intent(this, StreamingService::class.java).apply {
-                action = StreamingService.ACTION_TOGGLE_MUTE
-            })
+            startService(Intent(this, StreamingService::class.java).apply { action = StreamingService.ACTION_TOGGLE_MUTE })
         }
 
         switchCameraBtn.setOnClickListener {
-            startService(Intent(this, StreamingService::class.java).apply {
-                action = StreamingService.ACTION_SWITCH_CAMERA
-            })
+            startService(Intent(this, StreamingService::class.java).apply { action = StreamingService.ACTION_SWITCH_CAMERA })
         }
 
         torchBtn.setOnClickListener {
-            startService(Intent(this, StreamingService::class.java).apply {
-                action = StreamingService.ACTION_TOGGLE_TORCH
-            })
+            startService(Intent(this, StreamingService::class.java).apply { action = StreamingService.ACTION_TOGGLE_TORCH })
         }
 
         stopBtn.setOnClickListener {
-            startService(
-                Intent(this, StreamingService::class.java)
-                    .setAction(StreamingService.ACTION_STOP)
-            )
+            startService(Intent(this, StreamingService::class.java).setAction(StreamingService.ACTION_STOP))
             stopTimer()
+            stopViewersPolling()
             updateUiForStreamingState(false)
             window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             statusText.text = "Status: Stopping stream..."
         }
 
-        youtubeBtn.setOnClickListener { 
-            youtubeLauncher.launch(ytManager.signInIntent()) 
-        }
+        youtubeBtn.setOnClickListener { youtubeLauncher.launch(ytManager.signInIntent()) }
 
         pickFileBtn.setOnClickListener {
             val intent = Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
@@ -409,36 +375,16 @@ class MainActivity : AppCompatActivity() {
 
     private fun checkPermissionsAndProceed() {
         val needed = mutableListOf<String>()
-
-        if (Build.VERSION.SDK_INT >= 33 &&
-            ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
+        if (Build.VERSION.SDK_INT >= 33 && ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
             needed += Manifest.permission.POST_NOTIFICATIONS
         }
-
-        when (modeSpinner.selectedItemPosition) {
-            0 -> {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
-                    needed += Manifest.permission.CAMERA
-                }
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    needed += Manifest.permission.RECORD_AUDIO
-                }
-            }
-            1 -> {
-                if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-                    needed += Manifest.permission.RECORD_AUDIO
-                }
-            }
-            2 -> {
-                // SAF access
-            }
+        if (modeSpinner.selectedItemPosition == 0) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.CAMERA
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.RECORD_AUDIO
+        } else if (modeSpinner.selectedItemPosition == 1) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) needed += Manifest.permission.RECORD_AUDIO
         }
-
-        if (needed.isNotEmpty()) {
-            permissionLauncher.launch(needed.toTypedArray())
-        } else {
-            proceedWithCurrentMode()
-        }
+        if (needed.isNotEmpty()) permissionLauncher.launch(needed.toTypedArray()) else proceedWithCurrentMode()
     }
 
     private fun proceedWithCurrentMode() {
@@ -446,49 +392,33 @@ class MainActivity : AppCompatActivity() {
             0 -> launchService(StreamMode.CAMERA)
             1 -> {
                 if (floatingWidgetCheckbox.isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:$packageName")
-                    )
-                    overlayPermissionLauncher.launch(intent)
+                    overlayPermissionLauncher.launch(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
                 } else {
                     val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
                     projectionLauncher.launch(mpm.createScreenCaptureIntent())
                 }
             }
-            2 -> {
-                if (selectedFileUri == null) {
-                    statusText.text = "Status: Pick a video file first"
-                } else {
-                    launchService(StreamMode.FILE)
-                }
-            }
+            2 -> if (selectedFileUri == null) statusText.text = "Status: Pick video first" else launchService(StreamMode.FILE)
         }
     }
 
     private fun launchService(mode: StreamMode, resultCode: Int = 0, resultData: Intent? = null) {
         val isPortrait = (ratioSpinner.selectedItemPosition == 1)
-        val qualityPos = qualitySpinner.selectedItemPosition
-
-        val (width, height, bitrate) = when (qualityPos) {
+        val (width, height, bitrate) = when (qualitySpinner.selectedItemPosition) {
             0 -> if (isPortrait) Triple(1080, 1920, 4_500_000) else Triple(1920, 1080, 4_500_000)
-            2 -> if (isPortrait) Triple(480, 854, 1_200_000)   else Triple(854, 480, 1_200_000)
+            2 -> if (isPortrait) Triple(480, 854, 1_200_000) else Triple(854, 480, 1_200_000)
             else -> if (isPortrait) Triple(720, 1280, 2_500_000) else Triple(1280, 720, 2_500_000)
         }
-
         val config = StreamConfig(
             mode = mode,
             rtmpUrl = urlInput.text.toString().trim(),
             streamKey = keyInput.text.toString().trim(),
-            width = width,
-            height = height,
-            videoBitrate = bitrate,
+            width = width, height = height, videoBitrate = bitrate,
             echoCanceler = noiseCancelCheckbox.isChecked,
             noiseSuppressor = noiseCancelCheckbox.isChecked,
             fileUri = selectedFileUri,
             loopFile = loopCheckbox.isChecked
         )
-
         val intent = Intent(this, StreamingService::class.java).apply {
             action = StreamingService.ACTION_START
             putExtra(StreamingService.EXTRA_CONFIG, config)
@@ -506,12 +436,11 @@ class MainActivity : AppCompatActivity() {
     }
 
     override fun onDestroy() {
-        try {
-            unregisterReceiver(statusReceiver)
-        } catch (_: Exception) {}
+        try { unregisterReceiver(statusReceiver) } catch (_: Exception) {}
         StreamingService.openGlView = null
         window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         stopTimer()
+        stopViewersPolling()
         scope.cancel()
         super.onDestroy()
     }
