@@ -24,7 +24,6 @@ import androidx.core.app.ServiceCompat
 import com.pedro.common.ConnectChecker
 import com.pedro.encoder.input.decoder.AudioDecoderInterface
 import com.pedro.encoder.input.decoder.VideoDecoderInterface
-import com.pedro.encoder.utils.gl.AspectRatioMode
 import com.pedro.library.rtmp.RtmpCamera2
 import com.pedro.library.rtmp.RtmpDisplay
 import com.pedro.library.rtmp.RtmpFromFile
@@ -372,22 +371,12 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         
         val camRot = try {
             com.pedro.encoder.input.video.CameraHelper.getCameraOrientation(this@StreamingService)
-        } catch (_: Exception) {
-            val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-            when (if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) display?.rotation else @Suppress("DEPRECATION") wm.defaultDisplay.rotation) {
-                Surface.ROTATION_0 -> 90; Surface.ROTATION_90 -> 0; Surface.ROTATION_180 -> 270; Surface.ROTATION_270 -> 180; else -> 90
-            }
-        }
+        } catch (_: Exception) { 90 }
 
         rtmpCamera2?.apply {
             getStreamClient().setReTries(0)
-            
-            // EXACT dimensions sent to encoder without manual swapping
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 2, camRot)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
-            
-            // ADJUST mode prevents stretching
-            try { getGlInterface()?.setAspectRatioMode(AspectRatioMode.ADJUST) } catch (_: Exception) {}
             startStream(config.fullRtmpUrl)
         }
     }
@@ -400,13 +389,10 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             getStreamClient().setReTries(0)
             setIntentResult(resultCode, resultData)
 
-            // CRITICAL FIX: Direct dimensions, Rotation strictly 0. 
-            // This forces the encoder to create exactly a 1080x1920 canvas for YouTube.
+            // Keeping rotation exactly 0 and passing explicit width/height
+            // This natively feeds screen frames to the dimension chosen without triggering compiler bugs
             prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, 320)
             prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
-            
-            // ADJUST mode ensures the screen is drawn inside the canvas without squashing (adds black bars if ratios don't match)
-            try { getGlInterface()?.setAspectRatioMode(AspectRatioMode.ADJUST) } catch (_: Exception) {}
             
             startStream(config.fullRtmpUrl)
         }
@@ -419,7 +405,6 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             getStreamClient().setReTries(0)
             setLoopMode(config.loopFile)
             if (prepareVideo(this@StreamingService, uri) || prepareAudio(this@StreamingService, uri)) {
-                try { getGlInterface()?.setAspectRatioMode(AspectRatioMode.ADJUST) } catch (_: Exception) {}
                 startStream(config.fullRtmpUrl)
             }
         }
