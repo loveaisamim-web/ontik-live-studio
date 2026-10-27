@@ -214,7 +214,6 @@ class MainActivity : AppCompatActivity() {
 
         StreamingService.openGlView = cameraPreview
 
-        // Zoom SeekBar Listener
         zoomSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
                 val zoomLevel = 1.0f + (progress / 10.0f)
@@ -225,15 +224,19 @@ class MainActivity : AppCompatActivity() {
             override fun onStopTrackingTouch(seekBar: SeekBar?) {}
         })
 
-        // Pinch-to-zoom on preview surface
         cameraPreview.setOnTouchListener { _, event ->
             StreamingService.handleCameraTouch(event)
             true
         }
 
-        // Platform Presets
-        platformSpinner.adapter = ArrayAdapter(
-            this, android.R.layout.simple_spinner_dropdown_item,
+        // Custom White Text Adapters for all Spinners
+        fun createSpinnerAdapter(items: List<String>): ArrayAdapter<String> {
+            return ArrayAdapter(this, R.layout.item_spinner, items).apply {
+                setDropDownViewResource(R.layout.item_spinner_dropdown)
+            }
+        }
+
+        platformSpinner.adapter = createSpinnerAdapter(
             listOf("YouTube Live", "Facebook Live", "Twitch", "Custom RTMP")
         )
 
@@ -253,22 +256,18 @@ class MainActivity : AppCompatActivity() {
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
 
-        // Stream Mode
-        modeSpinner.adapter = ArrayAdapter(
-            this, android.R.layout.simple_spinner_dropdown_item,
+        modeSpinner.adapter = createSpinnerAdapter(
             listOf("Camera Live", "Screen Live", "Video File Live")
         )
 
-        ratioSpinner.adapter = ArrayAdapter(
-            this, android.R.layout.simple_spinner_dropdown_item,
+        ratioSpinner.adapter = createSpinnerAdapter(
             listOf(
                 "16:9 Landscape (YouTube Standard)",
                 "9:16 Portrait (YouTube Shorts / Vertical)"
             )
         )
 
-        qualitySpinner.adapter = ArrayAdapter(
-            this, android.R.layout.simple_spinner_dropdown_item,
+        qualitySpinner.adapter = createSpinnerAdapter(
             listOf(
                 "1080p Full HD (4.5 Mbps)",
                 "720p HD (2.5 Mbps - Recommended)",
@@ -401,7 +400,6 @@ class MainActivity : AppCompatActivity() {
         when (modeSpinner.selectedItemPosition) {
             0 -> launchService(StreamMode.CAMERA)
             1 -> {
-                // Check overlay permission if floating controls enabled
                 if (floatingWidgetCheckbox.isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
                     val intent = Intent(
                         Settings.ACTION_MANAGE_OVERLAY_PERMISSION,

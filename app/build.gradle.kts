@@ -10,7 +10,16 @@ android {
     packaging {
         resources {
             excludes += "/META-INF/INDEX.LIST"
-        excludes += "/META-INF/DEPENDENCIES"
+            excludes += "/META-INF/DEPENDENCIES"
+        }
+    }
+
+    signingConfigs {
+        getByName("debug") {
+            storeFile = file("debug.keystore")
+            storePassword = "android"
+            keyAlias = "androiddebugkey"
+            keyPassword = "android"
         }
     }
 
@@ -18,19 +27,25 @@ android {
         applicationId = "com.ontik.livestudio"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
     }
+
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         release {
             isMinifyEnabled = false
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
     }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+
     kotlinOptions { jvmTarget = "17" }
 }
 
@@ -47,7 +62,6 @@ dependencies {
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("androidx.lifecycle:lifecycle-runtime-ktx:2.8.7")
     implementation("androidx.lifecycle:lifecycle-service:2.8.7")
-
     implementation("androidx.security:security-crypto:1.1.0-alpha06")
 
     implementation("com.google.android.gms:play-services-auth:21.3.0")
