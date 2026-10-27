@@ -111,12 +111,12 @@ class MainActivity : AppCompatActivity() {
         pauseBtn.isEnabled = isStreaming
         pauseBtn.setBackgroundResource(if (isStreaming) R.drawable.bg_btn_mute else R.drawable.bg_btn_disabled)
         pauseBtn.setTextColor(ContextCompat.getColor(this, if (isStreaming) android.R.color.white else android.R.color.darker_gray))
-        if (!isStreaming) pauseBtn.text = "Pause"
+        if (!isStreaming) pauseBtn.text = "PAUSE"
 
         muteBtn.isEnabled = isStreaming
         muteBtn.setBackgroundResource(if (isStreaming) R.drawable.bg_btn_mute else R.drawable.bg_btn_disabled)
         muteBtn.setTextColor(ContextCompat.getColor(this, if (isStreaming) android.R.color.white else android.R.color.darker_gray))
-        if (!isStreaming) muteBtn.text = "Mute"
+        if (!isStreaming) muteBtn.text = "MUTE"
 
         stopBtn.isEnabled = isStreaming
         stopBtn.setBackgroundResource(if (isStreaming) R.drawable.bg_btn_stop else R.drawable.bg_btn_disabled)
@@ -138,7 +138,10 @@ class MainActivity : AppCompatActivity() {
     private fun stopTimer() { timerJob?.cancel(); timerJob = null; liveTimerText.text = "00:00:00"; bitrateText.text = "0 kbps" }
 
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { p ->
-        if (p.values.all { it }) proceedWithCurrentMode() else statusText.text = "Status: Permissions denied"
+        if (p.values.all { it }) {
+            if (modeSpinner.selectedItemPosition == 0) startCameraPreview()
+            else proceedWithCurrentMode()
+        } else statusText.text = "Status: Permissions denied"
     }
 
     private val projectionLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -205,16 +208,6 @@ class MainActivity : AppCompatActivity() {
             keyInput.setSelection(keyInput.text.length)
         }
 
-        zoomSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
-                val zoomLevel = 1.0f + (progress / 10.0f)
-                zoomLabel.text = String.format(Locale.US, "Zoom: %.1fx", zoomLevel)
-                StreamingService.setCameraZoom(zoomLevel)
-            }
-            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
-            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
-        })
-
         cameraPreview.setOnTouchListener { _, event -> StreamingService.handleCameraTouch(event); true }
 
         fun createSpinnerAdapter(items: List<String>): ArrayAdapter<String> = ArrayAdapter(this, R.layout.item_spinner, items).apply { setDropDownViewResource(R.layout.item_spinner_dropdown) }
@@ -222,21 +215,25 @@ class MainActivity : AppCompatActivity() {
         platformSpinner.adapter = createSpinnerAdapter(listOf("YouTube Live", "Facebook Live", "Twitch", "Custom RTMP"))
         modeSpinner.adapter = createSpinnerAdapter(listOf("Camera Live", "Screen Live", "Video File Live"))
         ratioSpinner.adapter = createSpinnerAdapter(listOf("9:16 Portrait (YouTube Shorts / Vertical)", "16:9 Landscape (YouTube Standard)"))
-        
-        // 1080p Full HD restored with optimized bitrates
-        qualitySpinner.adapter = createSpinnerAdapter(listOf(
-            "1080p Full HD (3.5 Mbps)",
-            "720p HD (2.0 Mbps)",
-            "480p SD (1.0 Mbps)"
-        ))
+        qualitySpinner.adapter = createSpinnerAdapter(listOf("1080p Full HD (3.5 Mbps)", "720p HD (2.0 Mbps)", "480p SD (1.0 Mbps)"))
 
         modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
-                cameraPreview.visibility = if (pos == 0) View.VISIBLE else View.GONE
-                cameraControlsLayout.visibility = if (pos == 0) View.VISIBLE else View.GONE
-                floatingWidgetCheckbox.visibility = if (pos == 1) View.VISIBLE else View.GONE
-                pickFileBtn.visibility = if (pos == 2) View.VISIBLE else View.GONE
-                loopCheckbox.visibility = if (pos == 2) View.VISIBLE else View.GONE
+                if (pos == 0) {
+                    cameraPreview.visibility = View.VISIBLE
+                    cameraControlsLayout.visibility = View.VISIBLE
+                    floatingWidgetCheckbox.visibility = View.GONE
+                    pickFileBtn.visibility = View.GONE
+                    loopCheckbox.visibility = View.GONE
+                    checkCameraPermissionAndStart()
+                } else {
+                    cameraPreview.visibility = View.GONE
+                    cameraControlsLayout.visibility = View.GONE
+                    stopCameraPreview()
+                    floatingWidgetCheckbox.visibility = if (pos == 1) View.VISIBLE else View.GONE
+                    pickFileBtn.visibility = if (pos == 2) View.VISIBLE else View.GONE
+                    loopCheckbox.visibility = if (pos == 2) View.VISIBLE else View.GONE
+                }
             }
             override fun onNothingSelected(parent: AdapterView<*>?) {}
         }
@@ -268,6 +265,24 @@ class MainActivity : AppCompatActivity() {
 
         val filter = IntentFilter(StreamingService.ACTION_STATUS)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) registerReceiver(statusReceiver, filter, Context.RECEIVER_NOT_EXPORTED) else registerReceiver(statusReceiver, filter)
+    }
+
+    private fun checkCameraPermissionAndStart() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) == PackageManager.PERMISSION_GRANTED) {
+            startCameraPreview()
+        } else {
+            permissionLauncher.launch(arrayOf(Manifest.permission.CAMERA))
+        }
+    }
+
+    private fun startCameraPreview() {
+        val i = Intent(this, StreamingService::class.java).apply { action = StreamingService.ACTION_START_PREVIEW }
+        startService(i)
+    }
+
+    private fun stopCameraPreview() {
+        val i = Intent(this, StreamingService::class.java).apply { action = StreamingService.ACTION_STOP_PREVIEW }
+        startService(i)
     }
 
     private fun checkPermissionsAndProceed() {
@@ -311,7 +326,7 @@ class MainActivity : AppCompatActivity() {
             mode = mode, rtmpUrl = urlInput.text.toString().trim(), streamKey = keyInput.text.toString().trim(),
             width = width, height = height, videoBitrate = bitrate,
             audioBitrate = 96_000, sampleRate = 44100, stereo = false, 
-            echoCanceler = false, noiseSuppressor = false, // Turned off to fix choppy audio
+            echoCanceler = false, noiseSuppressor = false,
             fileUri = selectedFileUri, loopFile = loopCheckbox.isChecked
         )
 

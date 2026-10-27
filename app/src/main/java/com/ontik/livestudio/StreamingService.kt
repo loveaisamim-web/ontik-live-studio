@@ -36,6 +36,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     companion object {
         const val ACTION_START = "com.ontik.START"
         const val ACTION_STOP  = "com.ontik.STOP"
+        const val ACTION_START_PREVIEW = "com.ontik.START_PREVIEW"
+        const val ACTION_STOP_PREVIEW  = "com.ontik.STOP_PREVIEW"
         const val ACTION_TOGGLE_MUTE = "com.ontik.TOGGLE_MUTE"
         const val ACTION_TOGGLE_PAUSE = "com.ontik.TOGGLE_PAUSE"
         const val ACTION_SWITCH_CAMERA = "com.ontik.SWITCH_CAMERA"
@@ -102,6 +104,12 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
+            ACTION_START_PREVIEW -> ensureCameraPreviewRunning()
+            ACTION_STOP_PREVIEW -> {
+                if (!isStreamingActive) {
+                    try { rtmpCamera2?.stopPreview() } catch (_: Exception) {}
+                }
+            }
             ACTION_START -> {
                 @Suppress("DEPRECATION")
                 val config = intent.getSerializableExtra(EXTRA_CONFIG) as? StreamConfig
@@ -109,7 +117,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 if (config != null) {
                     activeConfig = config; isStreamingActive = true; isAudioMuted = false; isStreamPaused = false; reconnectAttempts = 0
                     startStreaming(config, intent)
-                    if (enableFloating) uiHandler.post { showFloatingWidget() }
+                    if (enableFloating && config.mode == StreamMode.SCREEN) uiHandler.post { showFloatingWidget() }
                 }
             }
             ACTION_TOGGLE_PAUSE -> toggleStreamPause()
@@ -118,10 +126,24 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             ACTION_TOGGLE_TORCH -> toggleTorch()
             ACTION_SET_ZOOM -> applyCameraZoom(intent.getFloatExtra(EXTRA_ZOOM_LEVEL, 1.0f))
             ACTION_UPDATE_VIEWERS -> { currentViewers = intent.getLongExtra(EXTRA_VIEWERS, 0L); updateFloatingStats() }
-            ACTION_STOP -> { isStreamingActive = false; stopStreaming(keepPreview = false) }
+            ACTION_STOP -> { isStreamingActive = false; stopStreaming(keepPreview = true) }
         }
-        // START_STICKY ensures Android does not kill the stream when you switch to the game!
         return START_STICKY
+    }
+
+    private fun ensureCameraPreviewRunning() {
+        val view = openGlView ?: return
+        if (rtmpCamera2 == null) {
+            rtmpCamera2 = RtmpCamera2(view, this)
+        }
+        if (rtmpCamera2?.isOnPreview == false) {
+            try {
+                rtmpCamera2?.startPreview()
+                broadcastStatus("Camera Preview Active")
+            } catch (e: Exception) {
+                Log.e(TAG, "Camera preview error: ${e.message}")
+            }
+        }
     }
 
     private fun applyCameraZoom(level: Float) {
@@ -237,7 +259,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 text = "Stop"; textSize = 10f; setTextColor(Color.WHITE)
                 background = GradientDrawable().apply { cornerRadius = 10 * density; setColor(Color.parseColor("#D50000")) }
                 setPadding((6 * density).toInt(), 0, (6 * density).toInt(), 0); layoutParams = LinearLayout.LayoutParams(0, (32 * density).toInt(), 1f).apply { leftMargin = (6 * density).toInt() }
-                setOnClickListener { stopStreaming(keepPreview = false) }
+                setOnClickListener { stopStreaming(keepPreview = true) }
             }
 
             actionRow.addView(pauseBtn); actionRow.addView(muteBtn); actionRow.addView(stopBtn)
@@ -341,18 +363,23 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     }
 
     private fun startCamera(config: StreamConfig) {
-        val view = openGlView
-        rtmpCamera2 = if (view != null) RtmpCamera2(view, this) else RtmpCamera2(this, this)
+        ensureCameraPreviewRunning()
+        val cam = rtmpCamera2 ?: return
         
         val isPortrait = config.width < config.height
         val encW = if (isPortrait) config.height else config.width
         val encH = if (isPortrait) config.width else config.height
         val rot = if (isPortrait) 90 else 0
 
-        rtmpCamera2?.apply {
-            val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 2, rot)
-            val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
-            if (videoOk && audioOk) { startStream(config.fullRtmpUrl) } else { broadcastStatus("Camera Error"); stopStreaming(keepPreview = false) }
+        val videoOk = cam.prepareVideo(encW, encH, config.fps, config.videoBitrate, 2, rot)
+        val audioOk = cam.prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
+        
+        if (videoOk && audioOk) {
+            cam.startStream(config.fullRtmpUrl)
+            broadcastStatus("Live (Connected)", isLive = true)
+        } else {
+            broadcastStatus("Camera Setup Error")
+            stopStreaming(keepPreview = true)
         }
     }
 
@@ -369,28 +396,9 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             setIntentResult(resultCode, resultData) 
             
-            // 100% MATH FIX FOR SQUASHING
-            val metrics = resources.displayMetrics
-            val screenW = metrics.widthPixels.toFloat()
-            val screenH = metrics.heightPixels.toFloat()
-
-            val targetW = config.width.toFloat()
-            val targetH = config.height.toFloat()
-
-            // Scale screen down to fit exactly within chosen quality (1080p) without breaking aspect ratio
-            val scale = minOf(targetW / screenW, targetH / screenH)
-
-            var encW = (screenW * scale).toInt()
-            var encH = (screenH * scale).toInt()
-
-            // Hardware codecs require exact multiple of 16 dimensions to avoid squashing or crashing
-            encW -= (encW % 16)
-            encH -= (encH % 16)
-            
-            if (encW < 256) encW = 256
-            if (encH < 256) encH = 256
-
-            val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, metrics.densityDpi)
+            // Send exact standard 1080x1920 (9:16) or 1920x1080 (16:9) to YouTube
+            val dpi = resources.displayMetrics.densityDpi
+            val videoOk = prepareVideo(config.width, config.height, config.fps, config.videoBitrate, 0, dpi)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             
             if (videoOk && audioOk) {
@@ -415,7 +423,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         if (!isStreamingActive || activeConfig == null) return
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++
-            broadcastStatus("Dropped (Internet Slow). Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
+            broadcastStatus("Dropped (Network Slow). Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
             reconnectJob?.cancel()
             reconnectJob = serviceScope.launch {
                 delay(3000)
@@ -434,7 +442,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         }
     }
 
-    private fun stopStreaming(keepPreview: Boolean = false) {
+    private fun stopStreaming(keepPreview: Boolean = true) {
         isStreamingActive = false; isAudioMuted = false; isStreamPaused = false
         reconnectJob?.cancel(); releaseWakeAndWifiLocks(); removeFloatingWidget()
 
