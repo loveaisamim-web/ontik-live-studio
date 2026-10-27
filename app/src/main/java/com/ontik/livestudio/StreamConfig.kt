@@ -15,6 +15,8 @@ data class StreamConfig(
     val audioBitrate: Int = 128_000,
     val sampleRate: Int = 44_100,
     val stereo: Boolean = true,
+    val echoCanceler: Boolean = true,
+    val noiseSuppressor: Boolean = true,
     val loopFile: Boolean = false,
     val fileUri: String? = null
 ) : Serializable {
