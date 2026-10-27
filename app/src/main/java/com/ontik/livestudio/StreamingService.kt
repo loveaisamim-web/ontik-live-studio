@@ -9,7 +9,9 @@ import android.graphics.Color
 import android.graphics.PixelFormat
 import android.graphics.drawable.GradientDrawable
 import android.os.Build
+import android.os.Handler
 import android.os.IBinder
+import android.os.Looper
 import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
@@ -26,6 +28,7 @@ import com.pedro.library.rtmp.RtmpDisplay
 import com.pedro.library.rtmp.RtmpFromFile
 import com.pedro.library.view.OpenGlView
 import kotlinx.coroutines.*
+import kotlin.math.abs
 
 class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, AudioDecoderInterface {
 
@@ -73,10 +76,23 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private var reconnectJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
+    // Floating Bubble & Menu
     private var windowManager: WindowManager? = null
     private var floatingWidgetView: View? = null
+    private var floatingMenuLayout: LinearLayout? = null
     private var floatingMuteBtn: Button? = null
-    private var floatingStatusText: TextView? = null
+    private val uiHandler = Handler(Looper.getMainLooper())
+    private var isMenuExpanded = false
+
+    private val autoFadeRunnable = Runnable {
+        floatingWidgetView?.animate()?.alpha(0.25f)?.setDuration(400)?.start()
+    }
+
+    private fun resetAutoFadeTimer() {
+        uiHandler.removeCallbacks(autoFadeRunnable)
+        floatingWidgetView?.animate()?.alpha(1.0f)?.setDuration(150)?.start()
+        uiHandler.postDelayed(autoFadeRunnable, 2000)
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -136,6 +152,168 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         } catch (_: Exception) {}
     }
 
+    @SuppressLint("ClickableViewAccessibility")
+    private fun showFloatingWidget() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+            return
+        }
+        if (floatingWidgetView != null) return
+
+        try {
+            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
+            } else {
+                @Suppress("DEPRECATION")
+                WindowManager.LayoutParams.TYPE_PHONE
+            }
+
+            val params = WindowManager.LayoutParams(
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                WindowManager.LayoutParams.WRAP_CONTENT,
+                layoutType,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
+                PixelFormat.TRANSLUCENT
+            ).apply {
+                gravity = Gravity.TOP or Gravity.START
+                x = 40
+                y = 200
+            }
+
+            val density = resources.displayMetrics.density
+            val bubbleSize = (48 * density).toInt()
+
+            val rootLayout = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+            }
+
+            // Small Round Floating Bubble Icon
+            val bubbleIcon = TextView(this).apply {
+                layoutParams = LinearLayout.LayoutParams(bubbleSize, bubbleSize)
+                gravity = Gravity.CENTER
+                text = "🔴"
+                textSize = 18f
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.OVAL
+                    setColor(Color.parseColor("#E612141D"))
+                    setStroke((1.5f * density).toInt(), Color.parseColor("#FF1744"))
+                }
+            }
+
+            // Collapsible Menu Pill
+            val menuPill = LinearLayout(this).apply {
+                orientation = LinearLayout.HORIZONTAL
+                gravity = Gravity.CENTER_VERTICAL
+                setPadding((10 * density).toInt(), (4 * density).toInt(), (10 * density).toInt(), (4 * density).toInt())
+                visibility = View.GONE
+                background = GradientDrawable().apply {
+                    cornerRadius = 24 * density
+                    setColor(Color.parseColor("#F0181A26"))
+                    setStroke((1 * density).toInt(), Color.parseColor("#3B4259"))
+                }
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    LinearLayout.LayoutParams.WRAP_CONTENT
+                ).apply { leftMargin = (8 * density).toInt() }
+                layoutParams = lp
+            }
+            floatingMenuLayout = menuPill
+
+            val muteBtn = Button(this).apply {
+                text = "Mic On"
+                textSize = 10f
+                setTextColor(Color.WHITE)
+                background = GradientDrawable().apply {
+                    cornerRadius = 14 * density
+                    setColor(Color.parseColor("#2A3147"))
+                }
+                setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
+                setOnClickListener {
+                    resetAutoFadeTimer()
+                    toggleAudioMute()
+                }
+            }
+            floatingMuteBtn = muteBtn
+
+            val stopBtn = Button(this).apply {
+                text = "Stop"
+                textSize = 10f
+                setTextColor(Color.WHITE)
+                background = GradientDrawable().apply {
+                    cornerRadius = 14 * density
+                    setColor(Color.parseColor("#D50000"))
+                }
+                setPadding((12 * density).toInt(), 0, (12 * density).toInt(), 0)
+                val lp = LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT,
+                    (34 * density).toInt()
+                ).apply { leftMargin = (6 * density).toInt() }
+                layoutParams = lp
+                setOnClickListener {
+                    stopStreaming(keepPreview = false)
+                }
+            }
+
+            menuPill.addView(muteBtn)
+            menuPill.addView(stopBtn)
+
+            rootLayout.addView(bubbleIcon)
+            rootLayout.addView(menuPill)
+
+            // Drag vs Click Detection with Auto-fade
+            bubbleIcon.setOnTouchListener(object : View.OnTouchListener {
+                private var initialX = 0
+                private var initialY = 0
+                private var touchX = 0f
+                private var touchY = 0f
+
+                override fun onTouch(v: View, event: MotionEvent): Boolean {
+                    resetAutoFadeTimer()
+                    when (event.action) {
+                        MotionEvent.ACTION_DOWN -> {
+                            initialX = params.x
+                            initialY = params.y
+                            touchX = event.rawX
+                            touchY = event.rawY
+                            return true
+                        }
+                        MotionEvent.ACTION_MOVE -> {
+                            params.x = initialX + (event.rawX - touchX).toInt()
+                            params.y = initialY + (event.rawY - touchY).toInt()
+                            windowManager?.updateViewLayout(rootLayout, params)
+                            return true
+                        }
+                        MotionEvent.ACTION_UP -> {
+                            if (abs(event.rawX - touchX) < 15 && abs(event.rawY - touchY) < 15) {
+                                isMenuExpanded = !isMenuExpanded
+                                menuPill.visibility = if (isMenuExpanded) View.VISIBLE else View.GONE
+                            }
+                            return true
+                        }
+                    }
+                    return false
+                }
+            })
+
+            windowManager?.addView(rootLayout, params)
+            floatingWidgetView = rootLayout
+            resetAutoFadeTimer()
+        } catch (e: Exception) {
+            Log.e(TAG, "Floating bubble error: ${e.message}", e)
+        }
+    }
+
+    private fun removeFloatingWidget() {
+        uiHandler.removeCallbacks(autoFadeRunnable)
+        try {
+            floatingWidgetView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {}
+        floatingWidgetView = null
+        floatingMenuLayout = null
+        floatingMuteBtn = null
+    }
+
     private fun getCameraRotation(): Int {
         return try {
             com.pedro.encoder.input.video.CameraHelper.getCameraOrientation(this)
@@ -172,141 +350,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
     private fun releaseWakeLock() {
         try {
             wakeLock?.let { if (it.isHeld) it.release() }
-        } catch (e: Exception) {
-            Log.e(TAG, "WakeLock release error: ${e.message}")
-        }
-        wakeLock = null
-    }
-
-    @SuppressLint("ClickableViewAccessibility")
-    private fun showFloatingWidget() {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            Log.w(TAG, "Overlay permission not granted; skipping floating widget")
-            return
-        }
-
-        if (floatingWidgetView != null) return
-
-        try {
-            windowManager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-
-            val layoutType = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-            } else {
-                @Suppress("DEPRECATION")
-                WindowManager.LayoutParams.TYPE_PHONE
-            }
-
-            val params = WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                layoutType,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-                PixelFormat.TRANSLUCENT
-            ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                x = 60
-                y = 180
-            }
-
-            val rootLayout = LinearLayout(this).apply {
-                orientation = LinearLayout.HORIZONTAL
-                gravity = Gravity.CENTER_VERTICAL
-                setPadding(24, 16, 24, 16)
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#E6212121"))
-                    cornerRadius = 48f
-                    setStroke(2, Color.parseColor("#444444"))
-                }
-            }
-
-            val statusDot = TextView(this).apply {
-                text = "🔴 LIVE"
-                setTextColor(Color.parseColor("#FF5252"))
-                textSize = 12f
-                setTypeface(typeface, android.graphics.Typeface.BOLD)
-                setPadding(0, 0, 16, 0)
-            }
-            floatingStatusText = statusDot
-
-            val muteBtn = Button(this).apply {
-                text = "Mute"
-                textSize = 11f
-                setTextColor(Color.WHITE)
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#37474F"))
-                    cornerRadius = 24f
-                }
-                setPadding(20, 8, 20, 8)
-                setOnClickListener { toggleAudioMute() }
-            }
-            floatingMuteBtn = muteBtn
-
-            val stopBtn = Button(this).apply {
-                text = "Stop"
-                textSize = 11f
-                setTextColor(Color.WHITE)
-                background = GradientDrawable().apply {
-                    setColor(Color.parseColor("#C62828"))
-                    cornerRadius = 24f
-                }
-                setPadding(20, 8, 20, 8)
-                val lp = LinearLayout.LayoutParams(
-                    LinearLayout.LayoutParams.WRAP_CONTENT,
-                    LinearLayout.LayoutParams.WRAP_CONTENT
-                ).apply { leftMargin = 16 }
-                layoutParams = lp
-                setOnClickListener {
-                    stopStreaming(keepPreview = false)
-                }
-            }
-
-            rootLayout.addView(statusDot)
-            rootLayout.addView(muteBtn)
-            rootLayout.addView(stopBtn)
-
-            rootLayout.setOnTouchListener(object : View.OnTouchListener {
-                private var initialX = 0
-                private var initialY = 0
-                private var initialTouchX = 0f
-                private var initialTouchY = 0f
-
-                override fun onTouch(v: View, event: MotionEvent): Boolean {
-                    when (event.action) {
-                        MotionEvent.ACTION_DOWN -> {
-                            initialX = params.x
-                            initialY = params.y
-                            initialTouchX = event.rawX
-                            initialTouchY = event.rawY
-                            return true
-                        }
-                        MotionEvent.ACTION_MOVE -> {
-                            params.x = initialX + (event.rawX - initialTouchX).toInt()
-                            params.y = initialY + (event.rawY - initialTouchY).toInt()
-                            windowManager?.updateViewLayout(rootLayout, params)
-                            return true
-                        }
-                    }
-                    return false
-                }
-            })
-
-            windowManager?.addView(rootLayout, params)
-            floatingWidgetView = rootLayout
-        } catch (e: Exception) {
-            Log.e(TAG, "Floating widget creation error: ${e.message}", e)
-        }
-    }
-
-    private fun removeFloatingWidget() {
-        try {
-            floatingWidgetView?.let {
-                windowManager?.removeView(it)
-            }
         } catch (_: Exception) {}
-        floatingWidgetView = null
-        floatingMuteBtn = null
-        floatingStatusText = null
+        wakeLock = null
     }
 
     private fun switchCamera() {
@@ -357,7 +402,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             method.invoke(streamer)
             isAudioMuted = targetMute
 
-            floatingMuteBtn?.text = if (isAudioMuted) "Unmute" else "Mute"
+            floatingMuteBtn?.text = if (isAudioMuted) "Mic Off" else "Mic On"
 
             val intent = Intent(ACTION_STATUS).apply {
                 putExtra(EXTRA_IS_MUTED, isAudioMuted)
@@ -554,30 +599,11 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
 
     override fun onVideoDecoderFinished() {}
     override fun onAudioDecoderFinished() {}
-    override fun onConnectionStarted(url: String) { 
-        Log.d(TAG, "Connecting: $url")
-        broadcastStatus("Connecting to RTMP...")
-    }
-    override fun onConnectionSuccess() { 
-        Log.d(TAG, "Connected")
-        reconnectAttempts = 0
-        broadcastStatus("Connected (Live)", isLive = true)
-    }
-    override fun onConnectionFailed(reason: String) { 
-        Log.e(TAG, "Failed: $reason")
-        handleAutoReconnect(reason)
-    }
-    override fun onNewBitrate(bitrate: Long) {
-        broadcastBitrate(bitrate / 1000)
-    }
-    override fun onDisconnect() { 
-        Log.d(TAG, "Disconnected")
-        handleAutoReconnect("Disconnected")
-    }
-    override fun onAuthError() { 
-        Log.e(TAG, "Auth error")
-        broadcastStatus("RTMP Authentication failed")
-        stopStreaming(keepPreview = true)
-    }
+    override fun onConnectionStarted(url: String) { broadcastStatus("Connecting to RTMP...") }
+    override fun onConnectionSuccess() { reconnectAttempts = 0; broadcastStatus("Connected (Live)", isLive = true) }
+    override fun onConnectionFailed(reason: String) { handleAutoReconnect(reason) }
+    override fun onNewBitrate(bitrate: Long) { broadcastBitrate(bitrate / 1000) }
+    override fun onDisconnect() { handleAutoReconnect("Disconnected") }
+    override fun onAuthError() { broadcastStatus("RTMP Authentication failed"); stopStreaming(keepPreview = true) }
     override fun onAuthSuccess() {}
 }

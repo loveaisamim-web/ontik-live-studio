@@ -2,6 +2,7 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    android:background="#0C0D14"
     android:fillViewport="true"
     android:clipToPadding="false"
     android:paddingBottom="96dp">
@@ -10,46 +11,48 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:padding="16dp">
+        android:padding="14dp">
 
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="ONTIK Live Studio"
-            android:textSize="22sp"
-            android:textStyle="bold" />
-
-        <!-- Live Dashboard Card -->
+        <!-- Top Header & Live HUD Glass Card -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="12dp"
-            android:background="#1E1E1E"
+            android:background="@drawable/bg_glass_card"
             android:orientation="vertical"
-            android:padding="12dp">
+            android:padding="14dp">
 
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
+                android:gravity="center_vertical"
                 android:orientation="horizontal">
 
                 <TextView
-                    android:id="@+id/liveTimerText"
                     android:layout_width="0dp"
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
-                    android:text="00:00:00"
+                    android:text="ONTIK Studio"
                     android:textColor="#FFFFFF"
                     android:textSize="18sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/liveTimerText"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="00:00:00"
+                    android:textColor="#E0E0E0"
+                    android:textSize="15sp"
                     android:textStyle="bold" />
 
                 <TextView
                     android:id="@+id/bitrateText"
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:layout_marginStart="12dp"
                     android:text="0 kbps"
-                    android:textColor="#4CAF50"
-                    android:textSize="16sp"
+                    android:textColor="#00E676"
+                    android:textSize="14sp"
                     android:textStyle="bold" />
             </LinearLayout>
 
@@ -58,20 +61,21 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="6dp"
-                android:text="Status: Idle"
-                android:textColor="#BBBBBB"
-                android:textSize="14sp" />
+                android:text="Status: Ready"
+                android:textColor="#8E95AA"
+                android:textSize="12sp" />
         </LinearLayout>
 
         <!-- Camera Preview Surface -->
         <com.pedro.library.view.OpenGlView
             android:id="@+id/cameraPreview"
             android:layout_width="match_parent"
-            android:layout_height="240dp"
-            android:layout_marginTop="12dp"
+            android:layout_height="220dp"
+            android:layout_marginTop="10dp"
+            android:background="#12141D"
             android:visibility="gone" />
 
-        <!-- Camera Controls (Flip, Torch, Zoom) -->
+        <!-- Camera Controls -->
         <LinearLayout
             android:id="@+id/cameraControlsLayout"
             android:layout_width="match_parent"
@@ -88,20 +92,25 @@
                 <Button
                     android:id="@+id/switchCameraBtn"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
                     android:layout_weight="1"
+                    android:background="#1F2333"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
                     android:text="Flip Camera" />
 
                 <Button
                     android:id="@+id/torchBtn"
                     android:layout_width="0dp"
-                    android:layout_height="wrap_content"
+                    android:layout_height="40dp"
                     android:layout_weight="1"
                     android:layout_marginStart="6dp"
+                    android:background="#1F2333"
+                    android:textColor="#FFFFFF"
+                    android:textSize="12sp"
                     android:text="Torch Toggle" />
             </LinearLayout>
 
-            <!-- Zoom Control -->
             <LinearLayout
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
@@ -111,10 +120,11 @@
 
                 <TextView
                     android:id="@+id/zoomLabel"
-                    android:layout_width="80dp"
+                    android:layout_width="74dp"
                     android:layout_height="wrap_content"
                     android:text="Zoom: 1.0x"
-                    android:textStyle="bold" />
+                    android:textColor="#B0B5C9"
+                    android:textSize="12sp" />
 
                 <SeekBar
                     android:id="@+id/zoomSeekBar"
@@ -125,153 +135,191 @@
             </LinearLayout>
         </LinearLayout>
 
-        <!-- Platform Presets -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:text="Streaming Platform:"
-            android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/platformSpinner"
-            android:layout_width="match_parent"
-            android:layout_height="48dp" />
-
-        <!-- Source Mode -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Stream Source:"
-            android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/modeSpinner"
-            android:layout_width="match_parent"
-            android:layout_height="48dp" />
-
-        <!-- Aspect Ratio -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Aspect Ratio / Orientation:"
-            android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/ratioSpinner"
-            android:layout_width="match_parent"
-            android:layout_height="48dp" />
-
-        <!-- Video Quality -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:text="Video Resolution &amp; Quality:"
-            android:textStyle="bold" />
-
-        <Spinner
-            android:id="@+id/qualitySpinner"
-            android:layout_width="match_parent"
-            android:layout_height="48dp" />
-
-        <!-- Protection & Enhancements -->
-        <CheckBox
-            android:id="@+id/floatingWidgetCheckbox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="8dp"
-            android:checked="true"
-            android:text="Enable Floating Control Widget (Screen Mode)" />
-
-        <CheckBox
-            android:id="@+id/keepScreenOnCheckbox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:checked="true"
-            android:text="Keep Screen Awake (Prevent Sleep)" />
-
-        <CheckBox
-            android:id="@+id/noiseCancelCheckbox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:checked="true"
-            android:text="Enable Noise Reduction &amp; Echo Canceler" />
-
-        <!-- File Loop Checkbox -->
-        <CheckBox
-            android:id="@+id/loopCheckbox"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:checked="true"
-            android:text="Loop Video Continuously (File Mode)" />
-
-        <Button
-            android:id="@+id/pickFileBtn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            android:text="Pick Video File" />
-
-        <!-- RTMP Settings -->
-        <EditText
-            android:id="@+id/urlInput"
+        <!-- Stream Configuration Glass Card -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
-            android:hint="RTMP Ingest URL"
-            android:inputType="textUri"
-            android:importantForAutofill="no" />
+            android:background="@drawable/bg_glass_card"
+            android:orientation="vertical"
+            android:padding="12dp">
 
-        <EditText
-            android:id="@+id/keyInput"
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="STREAM CONFIGURATION"
+                android:textColor="#6C7594"
+                android:textSize="11sp"
+                android:textStyle="bold" />
+
+            <Spinner
+                android:id="@+id/platformSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_glass_input" />
+
+            <Spinner
+                android:id="@+id/modeSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_glass_input" />
+
+            <Spinner
+                android:id="@+id/ratioSpinner"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_glass_input" />
+
+            <Spinner
+                android:id="@+id/qualitySpinner"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_glass_input" />
+
+            <CheckBox
+                android:id="@+id/floatingWidgetCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="8dp"
+                android:checked="true"
+                android:textColor="#D1D5E5"
+                android:textSize="12sp"
+                android:text="Screen Bubble Widget (Auto-Fade)" />
+
+            <CheckBox
+                android:id="@+id/keepScreenOnCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:textColor="#D1D5E5"
+                android:textSize="12sp"
+                android:text="Keep Screen Awake" />
+
+            <CheckBox
+                android:id="@+id/noiseCancelCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:textColor="#D1D5E5"
+                android:textSize="12sp"
+                android:text="Noise &amp; Echo Canceler" />
+
+            <CheckBox
+                android:id="@+id/loopCheckbox"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:checked="true"
+                android:textColor="#D1D5E5"
+                android:textSize="12sp"
+                android:text="Loop Video Continuously (File Mode)" />
+
+            <Button
+                android:id="@+id/pickFileBtn"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="6dp"
+                android:background="#22283A"
+                android:textColor="#9EABCE"
+                android:textSize="12sp"
+                android:text="Pick Video File" />
+        </LinearLayout>
+
+        <!-- RTMP Settings Glass Card -->
+        <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:hint="Stream Key"
-            android:inputType="textPassword"
-            android:importantForAutofill="no" />
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_glass_card"
+            android:orientation="vertical"
+            android:padding="12dp">
 
-        <Button
-            android:id="@+id/youtubeBtn"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="6dp"
-            android:text="Sign in with YouTube" />
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="BROADCAST DESTINATION"
+                android:textColor="#6C7594"
+                android:textSize="11sp"
+                android:textStyle="bold" />
 
-        <!-- Control Action Buttons -->
+            <EditText
+                android:id="@+id/urlInput"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="6dp"
+                android:background="@drawable/bg_glass_input"
+                android:hint="RTMP Server URL"
+                android:textColorHint="#4E556D"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:paddingHorizontal="10dp"
+                android:inputType="textUri"
+                android:importantForAutofill="no" />
+
+            <EditText
+                android:id="@+id/keyInput"
+                android:layout_width="match_parent"
+                android:layout_height="42dp"
+                android:layout_marginTop="8dp"
+                android:background="@drawable/bg_glass_input"
+                android:hint="Stream Key"
+                android:textColorHint="#4E556D"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:paddingHorizontal="10dp"
+                android:inputType="textPassword"
+                android:importantForAutofill="no" />
+
+            <Button
+                android:id="@+id/youtubeBtn"
+                android:layout_width="match_parent"
+                android:layout_height="40dp"
+                android:layout_marginTop="8dp"
+                android:background="#CC0000"
+                android:textColor="#FFFFFF"
+                android:textSize="12sp"
+                android:text="Sign In With YouTube" />
+        </LinearLayout>
+
+        <!-- Bottom Action Buttons -->
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:orientation="horizontal"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="24dp">
+            android:layout_marginTop="16dp">
 
             <Button
                 android:id="@+id/startBtn"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
                 android:layout_weight="1"
-                android:text="Start" />
+                android:background="#00C853"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
+                android:text="Start Stream" />
 
             <Button
                 android:id="@+id/muteBtn"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
                 android:layout_weight="1"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="8dp"
+                android:background="#37474F"
+                android:textColor="#FFFFFF"
                 android:text="Mute Mic" />
 
             <Button
                 android:id="@+id/stopBtn"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
+                android:layout_height="46dp"
                 android:layout_weight="1"
-                android:layout_marginStart="6dp"
+                android:layout_marginStart="8dp"
+                android:background="#D50000"
+                android:textColor="#FFFFFF"
+                android:textStyle="bold"
                 android:text="Stop" />
         </LinearLayout>
 
