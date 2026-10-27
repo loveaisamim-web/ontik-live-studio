@@ -53,7 +53,7 @@ class YouTubeAuthManager(private val context: Context) {
             val status = LiveBroadcastStatus().apply { privacyStatus = "public" }
             val broadcast = LiveBroadcast().apply {
                 snippet = broadcastSnippet
-                this.status = status
+                setStatus(status) // Explicit setter
                 kind = "youtube#liveBroadcast"
             }
 
@@ -61,15 +61,18 @@ class YouTubeAuthManager(private val context: Context) {
             lastBroadcastId = insertedBroadcast.id
 
             val streamSnippet = LiveStreamSnippet().apply { title = "ONTIK Stream - $time" }
-            val cdn = CdnSettings().apply {
+            
+            // Rename variable and use explicit setter to avoid Kotlin val shadowing
+            val streamCdn = CdnSettings().apply {
                 format = "1080p"
                 ingestionType = "rtmp"
                 resolution = "variable"
                 frameRate = "variable"
             }
+            
             val stream = LiveStream().apply {
                 snippet = streamSnippet
-                cdn = cdn
+                setCdn(streamCdn) // Fixed: Direct Java method call
                 kind = "youtube#liveStream"
             }
 
