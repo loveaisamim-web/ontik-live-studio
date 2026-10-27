@@ -120,7 +120,8 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
             ACTION_UPDATE_VIEWERS -> { currentViewers = intent.getLongExtra(EXTRA_VIEWERS, 0L); updateFloatingStats() }
             ACTION_STOP -> { isStreamingActive = false; stopStreaming(keepPreview = false) }
         }
-        return START_NOT_STICKY
+        // START_STICKY ensures Android does not kill the stream when you switch to the game!
+        return START_STICKY
     }
 
     private fun applyCameraZoom(level: Float) {
@@ -368,29 +369,27 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             setIntentResult(resultCode, resultData) 
             
-            // 100% SQUASH FIX - Auto scales to EXACT mobile aspect ratio
+            // 100% MATH FIX FOR SQUASHING
             val metrics = resources.displayMetrics
             val screenW = metrics.widthPixels.toFloat()
             val screenH = metrics.heightPixels.toFloat()
-            val isDevicePortrait = screenW < screenH
 
-            var encW = config.width
-            var encH = config.height
+            val targetW = config.width.toFloat()
+            val targetH = config.height.toFloat()
 
-            // Calculate height/width precisely keeping phone's physical screen ratio
-            if (isDevicePortrait) {
-                encH = maxOf(config.width, config.height)
-                encW = (encH * (screenW / screenH)).toInt()
-            } else {
-                encW = maxOf(config.width, config.height)
-                encH = (encW * (screenH / screenW)).toInt()
-            }
+            // Scale screen down to fit exactly within chosen quality (1080p) without breaking aspect ratio
+            val scale = minOf(targetW / screenW, targetH / screenH)
 
-            // Ensure dimensions are even numbers (Hardware encoder requirement)
-            encW -= (encW % 2)
-            encH -= (encH % 2)
+            var encW = (screenW * scale).toInt()
+            var encH = (screenH * scale).toInt()
 
-            // Rotation is 0 because we pass the exactly calculated HxW directly
+            // Hardware codecs require exact multiple of 16 dimensions to avoid squashing or crashing
+            encW -= (encW % 16)
+            encH -= (encH % 16)
+            
+            if (encW < 256) encW = 256
+            if (encH < 256) encH = 256
+
             val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, metrics.densityDpi)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             
@@ -416,7 +415,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         if (!isStreamingActive || activeConfig == null) return
         if (reconnectAttempts < maxReconnectAttempts) {
             reconnectAttempts++
-            broadcastStatus("Dropped (Network Slow). Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
+            broadcastStatus("Dropped (Internet Slow). Reconnecting ($reconnectAttempts/$maxReconnectAttempts)...")
             reconnectJob?.cancel()
             reconnectJob = serviceScope.launch {
                 delay(3000)
@@ -430,7 +429,7 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
                 }
             }
         } else {
-            broadcastStatus("Live Disconnected: Internet too slow")
+            broadcastStatus("Live Disconnected: Unstable Network")
             stopStreaming(keepPreview = true)
         }
     }

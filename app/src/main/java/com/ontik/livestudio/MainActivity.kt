@@ -223,11 +223,11 @@ class MainActivity : AppCompatActivity() {
         modeSpinner.adapter = createSpinnerAdapter(listOf("Camera Live", "Screen Live", "Video File Live"))
         ratioSpinner.adapter = createSpinnerAdapter(listOf("9:16 Portrait (YouTube Shorts / Vertical)", "16:9 Landscape (YouTube Standard)"))
         
-        // Fully Restored 1080p High Quality as Default
+        // 1080p Full HD restored with optimized bitrates
         qualitySpinner.adapter = createSpinnerAdapter(listOf(
-            "1080p Full HD (4.0 Mbps - Auto-Optimized)",
-            "720p HD (2.0 Mbps - Standard)",
-            "480p SD (1.0 Mbps - Data Saver)"
+            "1080p Full HD (3.5 Mbps)",
+            "720p HD (2.0 Mbps)",
+            "480p SD (1.0 Mbps)"
         ))
 
         modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -304,14 +304,14 @@ class MainActivity : AppCompatActivity() {
         val (width, height, bitrate) = when (qualityPos) {
             1 -> if (isPortrait) Triple(720, 1280, 2_000_000) else Triple(1280, 720, 2_000_000)
             2 -> if (isPortrait) Triple(480, 854, 1_000_000) else Triple(854, 480, 1_000_000)
-            else -> if (isPortrait) Triple(1080, 1920, 4_000_000) else Triple(1920, 1080, 4_000_000)
+            else -> if (isPortrait) Triple(1080, 1920, 3_500_000) else Triple(1920, 1080, 3_500_000)
         }
 
         val config = StreamConfig(
             mode = mode, rtmpUrl = urlInput.text.toString().trim(), streamKey = keyInput.text.toString().trim(),
             width = width, height = height, videoBitrate = bitrate,
-            audioBitrate = 128_000, sampleRate = 44100, stereo = false,
-            echoCanceler = noiseCancelCheckbox.isChecked, noiseSuppressor = noiseCancelCheckbox.isChecked,
+            audioBitrate = 96_000, sampleRate = 44100, stereo = false, 
+            echoCanceler = false, noiseSuppressor = false, // Turned off to fix choppy audio
             fileUri = selectedFileUri, loopFile = loopCheckbox.isChecked
         )
 
