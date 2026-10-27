@@ -326,31 +326,37 @@ class StreamingService : Service(), ConnectChecker, VideoDecoderInterface, Audio
         rtmpDisplay = RtmpDisplay(this, true, this).apply {
             setIntentResult(resultCode, resultData) 
             
-            // 🔥 100% MATH FIX FOR SQUASHING 🔥
-            val metrics = resources.displayMetrics
-            val screenW = metrics.widthPixels.toFloat()
-            val screenH = metrics.heightPixels.toFloat()
+            // 🔥 100% YOUTUBE SHORTS FIX 🔥
+            // ALWAYS SEND EXACT RESOLUTION (e.g. 1080x1920). 
+            // If you change this math, YouTube will throw it into a 16:9 player as a small square!
+            val encW = config.width
+            val encH = config.height
+            val dpi = resources.displayMetrics.densityDpi
 
-            val targetW = config.width.toFloat()
-            val targetH = config.height.toFloat()
-
-            // Scale screen precisely so it doesn't lose original ratio
-            val scale = minOf(targetW / screenW, targetH / screenH)
-
-            var encW = (screenW * scale).toInt()
-            var encH = (screenH * scale).toInt()
-
-            // Hardware codecs require even/16 multiples
-            encW -= (encW % 16)
-            encH -= (encH % 16)
-            
-            if (encW < 256) encW = 256
-            if (encH < 256) encH = 256
-
-            val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, metrics.densityDpi)
+            val videoOk = prepareVideo(encW, encH, config.fps, config.videoBitrate, 0, dpi)
             val audioOk = prepareAudio(config.audioBitrate, config.sampleRate, config.stereo, config.echoCanceler, config.noiseSuppressor)
             
             if (videoOk && audioOk) {
+                // Prevent squashing internally using OpenGL AspectRatioMode.ADJUST
+                try {
+                    val gl = javaClass.getMethod("getGlInterface").invoke(this)
+                    if (gl != null) {
+                        var modeClass: Class<*>? = null
+                        try { modeClass = Class.forName("com.pedro.encoder.utils.gl.AspectRatioMode") } catch (_: Exception) {}
+                        if (modeClass == null) {
+                            try { modeClass = Class.forName("com.pedro.library.view.AspectRatioMode") } catch (_: Exception) {}
+                        }
+                        if (modeClass != null) {
+                            val adjustMode = modeClass.enumConstants?.firstOrNull { it.toString() == "ADJUST" }
+                            if (adjustMode != null) {
+                                gl.javaClass.getMethod("setAspectRatioMode", modeClass).invoke(gl, adjustMode)
+                            }
+                        }
+                    }
+                } catch (e: Exception) {
+                    Log.e(TAG, "Aspect Ratio Mode Error: ${e.message}")
+                }
+
                 startStream(config.fullRtmpUrl)
             } else {
                 broadcastStatus("SCREEN ENCODER ERROR")
