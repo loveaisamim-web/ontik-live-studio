@@ -2,7 +2,9 @@
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:fillViewport="true">
+    android:fillViewport="true"
+    android:clipToPadding="false"
+    android:paddingBottom="96dp">
 
     <LinearLayout
         android:layout_width="match_parent"
@@ -61,7 +63,7 @@
                 android:textSize="14sp" />
         </LinearLayout>
 
-        <!-- Camera Preview Surface (Visible only in Camera Mode) -->
+        <!-- Camera Preview Surface -->
         <com.pedro.library.view.OpenGlView
             android:id="@+id/cameraPreview"
             android:layout_width="match_parent"
@@ -69,29 +71,58 @@
             android:layout_marginTop="12dp"
             android:visibility="gone" />
 
-        <!-- Camera Controls (Flip & Torch) -->
+        <!-- Camera Controls (Flip, Torch, Zoom) -->
         <LinearLayout
             android:id="@+id/cameraControlsLayout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:orientation="horizontal"
+            android:orientation="vertical"
             android:layout_marginTop="6dp"
             android:visibility="gone">
 
-            <Button
-                android:id="@+id/switchCameraBtn"
-                android:layout_width="0dp"
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:text="Flip Camera" />
+                android:orientation="horizontal">
 
-            <Button
-                android:id="@+id/torchBtn"
-                android:layout_width="0dp"
+                <Button
+                    android:id="@+id/switchCameraBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Flip Camera" />
+
+                <Button
+                    android:id="@+id/torchBtn"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:layout_marginStart="6dp"
+                    android:text="Torch Toggle" />
+            </LinearLayout>
+
+            <!-- Zoom Control -->
+            <LinearLayout
+                android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:layout_marginStart="6dp"
-                android:text="Torch Toggle" />
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:layout_marginTop="6dp">
+
+                <TextView
+                    android:id="@+id/zoomLabel"
+                    android:layout_width="80dp"
+                    android:layout_height="wrap_content"
+                    android:text="Zoom: 1.0x"
+                    android:textStyle="bold" />
+
+                <SeekBar
+                    android:id="@+id/zoomSeekBar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:max="40"
+                    android:progress="0" />
+            </LinearLayout>
         </LinearLayout>
 
         <!-- Platform Presets -->
@@ -148,10 +179,18 @@
 
         <!-- Protection & Enhancements -->
         <CheckBox
-            android:id="@+id/keepScreenOnCheckbox"
+            android:id="@+id/floatingWidgetCheckbox"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="8dp"
+            android:checked="true"
+            android:text="Enable Floating Control Widget (Screen Mode)" />
+
+        <CheckBox
+            android:id="@+id/keepScreenOnCheckbox"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
             android:checked="true"
             android:text="Keep Screen Awake (Prevent Sleep)" />
 

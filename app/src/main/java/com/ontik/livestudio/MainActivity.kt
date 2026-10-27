@@ -1,6 +1,7 @@
 package com.ontik.livestudio
 
 import android.Manifest
+import android.annotation.SuppressLint
 import android.app.Activity
 import android.content.BroadcastReceiver
 import android.content.Context
@@ -12,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.os.SystemClock
+import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.widget.*
@@ -28,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var modeSpinner: Spinner
     private lateinit var ratioSpinner: Spinner
     private lateinit var qualitySpinner: Spinner
+    private lateinit var floatingWidgetCheckbox: CheckBox
     private lateinit var keepScreenOnCheckbox: CheckBox
     private lateinit var noiseCancelCheckbox: CheckBox
     private lateinit var loopCheckbox: CheckBox
@@ -38,6 +41,8 @@ class MainActivity : AppCompatActivity() {
     private lateinit var stopBtn: Button
     private lateinit var switchCameraBtn: Button
     private lateinit var torchBtn: Button
+    private lateinit var zoomSeekBar: SeekBar
+    private lateinit var zoomLabel: TextView
     private lateinit var youtubeBtn: Button
     private lateinit var pickFileBtn: Button
     private lateinit var statusText: TextView
@@ -131,6 +136,13 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    private val overlayPermissionLauncher = registerForActivityResult(
+        ActivityResultContracts.StartActivityForResult()
+    ) {
+        val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+        projectionLauncher.launch(mpm.createScreenCaptureIntent())
+    }
+
     private val filePicker = registerForActivityResult(
         ActivityResultContracts.StartActivityForResult()
     ) { result ->
@@ -170,33 +182,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    @SuppressLint("ClickableViewAccessibility")
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_main)
 
-        platformSpinner      = findViewById(R.id.platformSpinner)
-        modeSpinner          = findViewById(R.id.modeSpinner)
-        ratioSpinner         = findViewById(R.id.ratioSpinner)
-        qualitySpinner       = findViewById(R.id.qualitySpinner)
-        keepScreenOnCheckbox = findViewById(R.id.keepScreenOnCheckbox)
-        noiseCancelCheckbox  = findViewById(R.id.noiseCancelCheckbox)
-        loopCheckbox         = findViewById(R.id.loopCheckbox)
-        urlInput             = findViewById(R.id.urlInput)
-        keyInput             = findViewById(R.id.keyInput)
-        startBtn             = findViewById(R.id.startBtn)
-        muteBtn              = findViewById(R.id.muteBtn)
-        stopBtn              = findViewById(R.id.stopBtn)
-        switchCameraBtn      = findViewById(R.id.switchCameraBtn)
-        torchBtn             = findViewById(R.id.torchBtn)
-        youtubeBtn           = findViewById(R.id.youtubeBtn)
-        pickFileBtn          = findViewById(R.id.pickFileBtn)
-        statusText           = findViewById(R.id.statusText)
-        liveTimerText        = findViewById(R.id.liveTimerText)
-        bitrateText          = findViewById(R.id.bitrateText)
-        cameraPreview        = findViewById(R.id.cameraPreview)
-        cameraControlsLayout = findViewById(R.id.cameraControlsLayout)
+        platformSpinner        = findViewById(R.id.platformSpinner)
+        modeSpinner            = findViewById(R.id.modeSpinner)
+        ratioSpinner           = findViewById(R.id.ratioSpinner)
+        qualitySpinner         = findViewById(R.id.qualitySpinner)
+        floatingWidgetCheckbox = findViewById(R.id.floatingWidgetCheckbox)
+        keepScreenOnCheckbox   = findViewById(R.id.keepScreenOnCheckbox)
+        noiseCancelCheckbox    = findViewById(R.id.noiseCancelCheckbox)
+        loopCheckbox           = findViewById(R.id.loopCheckbox)
+        urlInput               = findViewById(R.id.urlInput)
+        keyInput               = findViewById(R.id.keyInput)
+        startBtn               = findViewById(R.id.startBtn)
+        muteBtn                = findViewById(R.id.muteBtn)
+        stopBtn                = findViewById(R.id.stopBtn)
+        switchCameraBtn        = findViewById(R.id.switchCameraBtn)
+        torchBtn               = findViewById(R.id.torchBtn)
+        zoomSeekBar            = findViewById(R.id.zoomSeekBar)
+        zoomLabel              = findViewById(R.id.zoomLabel)
+        youtubeBtn             = findViewById(R.id.youtubeBtn)
+        pickFileBtn            = findViewById(R.id.pickFileBtn)
+        statusText             = findViewById(R.id.statusText)
+        liveTimerText          = findViewById(R.id.liveTimerText)
+        bitrateText            = findViewById(R.id.bitrateText)
+        cameraPreview          = findViewById(R.id.cameraPreview)
+        cameraControlsLayout   = findViewById(R.id.cameraControlsLayout)
 
         StreamingService.openGlView = cameraPreview
+
+        // Zoom SeekBar Listener
+        zoomSeekBar.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                val zoomLevel = 1.0f + (progress / 10.0f)
+                zoomLabel.text = String.format(Locale.US, "Zoom: %.1fx", zoomLevel)
+                StreamingService.setCameraZoom(zoomLevel)
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+
+        // Pinch-to-zoom on preview surface
+        cameraPreview.setOnTouchListener { _, event ->
+            StreamingService.handleCameraTouch(event)
+            true
+        }
 
         // Platform Presets
         platformSpinner.adapter = ArrayAdapter(
@@ -246,10 +279,12 @@ class MainActivity : AppCompatActivity() {
         modeSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
             override fun onItemSelected(parent: AdapterView<*>?, view: View?, pos: Int, id: Long) {
                 val isCamera = (pos == 0)
+                val isScreen = (pos == 1)
                 val isFile = (pos == 2)
 
                 cameraPreview.visibility = if (isCamera) View.VISIBLE else View.GONE
                 cameraControlsLayout.visibility = if (isCamera) View.VISIBLE else View.GONE
+                floatingWidgetCheckbox.visibility = if (isScreen) View.VISIBLE else View.GONE
                 pickFileBtn.visibility = if (isFile) View.VISIBLE else View.GONE
                 loopCheckbox.visibility = if (isFile) View.VISIBLE else View.GONE
                 noiseCancelCheckbox.visibility = if (isFile) View.GONE else View.VISIBLE
@@ -366,8 +401,17 @@ class MainActivity : AppCompatActivity() {
         when (modeSpinner.selectedItemPosition) {
             0 -> launchService(StreamMode.CAMERA)
             1 -> {
-                val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-                projectionLauncher.launch(mpm.createScreenCaptureIntent())
+                // Check overlay permission if floating controls enabled
+                if (floatingWidgetCheckbox.isChecked && Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
+                    val intent = Intent(
+                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:$packageName")
+                    )
+                    overlayPermissionLauncher.launch(intent)
+                } else {
+                    val mpm = getSystemService(MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+                    projectionLauncher.launch(mpm.createScreenCaptureIntent())
+                }
             }
             2 -> {
                 if (selectedFileUri == null) {
@@ -405,6 +449,7 @@ class MainActivity : AppCompatActivity() {
         val intent = Intent(this, StreamingService::class.java).apply {
             action = StreamingService.ACTION_START
             putExtra(StreamingService.EXTRA_CONFIG, config)
+            putExtra(StreamingService.EXTRA_ENABLE_FLOATING, floatingWidgetCheckbox.isChecked)
             if (resultData != null) {
                 putExtra(StreamingService.EXTRA_RESULT_CODE, resultCode)
                 putExtra(StreamingService.EXTRA_RESULT_DATA, resultData)
